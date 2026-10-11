@@ -1,7 +1,7 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { Outlet, Link, createRootRouteWithContext, useRouter, HeadContent, Scripts, type ErrorComponentProps } from "@tanstack/react-router";
+import { Outlet, Link, createRootRouteWithContext, useRouter, useRouterState, HeadContent, Scripts, type ErrorComponentProps } from "@tanstack/react-router";
 import { useEffect, type ReactNode } from "react";
-import { LayoutDashboard, Megaphone, MousePointerClick, ShoppingBag, Lightbulb, FileText } from "lucide-react";
+import { LayoutDashboard, Megaphone, MousePointerClick, ShoppingBag, Lightbulb, FileText, LogOut } from "lucide-react";
 
 import appCss from "../styles.css?url";
 import { reportLovableError } from "../lib/lovable-error-reporting";
@@ -83,6 +83,19 @@ const NAV = [
 
 function RootComponent() {
   const { queryClient } = Route.useRouteContext();
+  const currentPath = useRouterState({ select: (state) => state.location.pathname });
+
+  useEffect(() => {
+    window.localStorage.removeItem("lp-radar-runtime-config");
+  }, []);
+
+  async function handleLogout() {
+    await fetch("/api/auth/logout", { method: "POST" });
+    window.location.replace("/login");
+  }
+
+  if (currentPath === "/login") return <Outlet />;
+
   return (
     <QueryClientProvider client={queryClient}>
       <div className="flex min-h-screen">
@@ -98,8 +111,13 @@ function RootComponent() {
               </Link>
             ))}
           </nav>
-          <div className="mt-auto rounded-md border border-dashed border-border p-3 text-xs text-muted-foreground">
-            Données de démonstration. Google Ads & Shopify à connecter.
+          <div className="mt-auto space-y-3">
+            <div className="rounded-md border border-dashed border-border p-3 text-xs text-muted-foreground">
+              Accès privé · secrets conservés côté serveur.
+            </div>
+            <button type="button" onClick={handleLogout} className="nav-link w-full">
+              <LogOut className="h-4 w-4" /> Déconnexion
+            </button>
           </div>
         </aside>
         <main className="min-w-0 flex-1 p-6 md:p-10">
@@ -107,6 +125,7 @@ function RootComponent() {
             {NAV.map(({ to, label }) => (
               <Link key={to} to={to} className="nav-link whitespace-nowrap" activeProps={{ className: "nav-active" }} activeOptions={{ exact: true }}>{label}</Link>
             ))}
+            <button type="button" onClick={handleLogout} className="nav-link whitespace-nowrap">Déconnexion</button>
           </nav>
           <Outlet />
         </main>

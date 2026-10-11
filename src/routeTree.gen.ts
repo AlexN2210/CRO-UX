@@ -12,6 +12,7 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as CroRouteImport } from './routes/cro'
 import { Route as DevisRouteImport } from './routes/devis'
+import { Route as LoginRouteImport } from './routes/login'
 import { Route as RapportRouteImport } from './routes/rapport'
 import { Route as RecommandationRouteImport } from './routes/recommandation'
 import { Route as SeaRouteImport } from './routes/sea'
@@ -30,6 +31,11 @@ const CroRoute = CroRouteImport.update({
 const DevisRoute = DevisRouteImport.update({
   id: '/devis',
   path: '/devis',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const LoginRoute = LoginRouteImport.update({
+  id: '/login',
+  path: '/login',
   getParentRoute: () => rootRouteImport,
 } as any)
 const RapportRoute = RapportRouteImport.update({
@@ -57,6 +63,7 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/cro': typeof CroRoute
   '/devis': typeof DevisRoute
+  '/login': typeof LoginRoute
   '/rapport': typeof RapportRoute
   '/recommandation': typeof RecommandationRoute
   '/sea': typeof SeaRoute
@@ -66,6 +73,7 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/cro': typeof CroRoute
   '/devis': typeof DevisRoute
+  '/login': typeof LoginRoute
   '/rapport': typeof RapportRoute
   '/recommandation': typeof RecommandationRoute
   '/sea': typeof SeaRoute
@@ -76,6 +84,7 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/cro': typeof CroRoute
   '/devis': typeof DevisRoute
+  '/login': typeof LoginRoute
   '/rapport': typeof RapportRoute
   '/recommandation': typeof RecommandationRoute
   '/sea': typeof SeaRoute
@@ -87,6 +96,7 @@ export interface FileRouteTypes {
     | '/'
     | '/cro'
     | '/devis'
+    | '/login'
     | '/rapport'
     | '/recommandation'
     | '/sea'
@@ -96,6 +106,7 @@ export interface FileRouteTypes {
     | '/'
     | '/cro'
     | '/devis'
+    | '/login'
     | '/rapport'
     | '/recommandation'
     | '/sea'
@@ -105,6 +116,7 @@ export interface FileRouteTypes {
     | '/'
     | '/cro'
     | '/devis'
+    | '/login'
     | '/rapport'
     | '/recommandation'
     | '/sea'
@@ -115,6 +127,7 @@ export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   CroRoute: typeof CroRoute
   DevisRoute: typeof DevisRoute
+  LoginRoute: typeof LoginRoute
   RapportRoute: typeof RapportRoute
   RecommandationRoute: typeof RecommandationRoute
   SeaRoute: typeof SeaRoute
@@ -142,6 +155,13 @@ declare module '@tanstack/react-router' {
       path: '/devis'
       fullPath: '/devis'
       preLoaderRoute: typeof DevisRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/login': {
+      id: '/login'
+      path: '/login'
+      fullPath: '/login'
+      preLoaderRoute: typeof LoginRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/rapport': {
@@ -179,6 +199,7 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   CroRoute: CroRoute,
   DevisRoute: DevisRoute,
+  LoginRoute: LoginRoute,
   RapportRoute: RapportRoute,
   RecommandationRoute: RecommandationRoute,
   SeaRoute: SeaRoute,

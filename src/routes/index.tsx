@@ -1,4 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
+import { useState } from "react";
 import { ResponsiveContainer, ScatterChart, Scatter, XAxis, YAxis, ZAxis, Tooltip, CartesianGrid, BarChart, Bar, Cell } from "recharts";
 import { getLPs, estimate, eur } from "@/lib/data";
 import { PageHeader, Stat, Panel, DataTable, ScorePill } from "@/components/ui-kit";
@@ -18,11 +19,33 @@ export const Route = createFileRoute("/")({
 const tip = { contentStyle: { background: "var(--card)", border: "1px solid var(--border)", borderRadius: 8, fontSize: 12 } };
 
 function Dashboard() {
-  const lps = getLPs();
+  const [analysisLps, setAnalysisLps] = useState(getLPs());
+  const [analysisMessage, setAnalysisMessage] = useState("L’analyse utilisera les accès sécurisés configurés sur le serveur.");
+  const [isLaunching, setIsLaunching] = useState(false);
+  const lps = analysisLps;
   const est = estimate(lps);
   const spend = lps.reduce((s, l) => s + l.spend, 0);
   const p1Spend = est.p1.reduce((s, l) => s + l.spend, 0);
   const prio = (["P1", "P2", "P3"] as const).map((p) => ({ p, n: lps.filter((l) => l.priority === p).length }));
+
+  const handleLaunchAnalysis = async () => {
+    setIsLaunching(true);
+    try {
+      const response = await fetch("/api/analysis", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: "{}",
+      });
+      const result = await response.json() as { lps?: typeof lps; connectedSources?: string[]; error?: string };
+      if (!response.ok) throw new Error(result.error ?? "L’analyse a échoué.");
+      if (result.lps) setAnalysisLps(result.lps);
+      setAnalysisMessage(`Analyse terminée : ${result.lps?.length ?? 0} LP · ${(result.connectedSources ?? []).join(" · ") || "données démo"}.`);
+    } catch (error) {
+      setAnalysisMessage(error instanceof Error ? error.message : "Erreur pendant l’analyse.");
+    } finally {
+      setIsLaunching(false);
+    }
+  };
 
   return (
     <>
@@ -35,6 +58,20 @@ function Dashboard() {
         <Stat label="LP prioritaires (P1)" value={est.p1.length} hint={`${Math.round((p1Spend / spend) * 100)} % de la dépense`} />
         <Stat label="Approche" value={<span className="text-primary text-2xl">{est.approach}</span>} hint={`${est.days} j · ${eur(est.budget)}`} />
       </div>
+
+      <Panel className="mt-6" title="Analyse sécurisée">
+        <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
+          <p className="text-sm text-primary" role="status">{analysisMessage}</p>
+          <button
+            type="button"
+            className="btn-primary"
+            onClick={handleLaunchAnalysis}
+            disabled={isLaunching}
+          >
+            {isLaunching ? "Analyse en cours..." : "Lancer l'analyse"}
+          </button>
+        </div>
+      </Panel>
 
       <Panel className="mt-6" title="Workflow de l’analyse">
         <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
