@@ -1,0 +1,113 @@
+import { createFileRoute, Link } from "@tanstack/react-router";
+import { ResponsiveContainer, ScatterChart, Scatter, XAxis, YAxis, ZAxis, Tooltip, CartesianGrid, BarChart, Bar, Cell } from "recharts";
+import { getLPs, estimate, eur } from "@/lib/data";
+import { PageHeader, Stat, Panel, DataTable, ScorePill } from "@/components/ui-kit";
+
+export const Route = createFileRoute("/")({
+  head: () => ({
+    meta: [
+      { title: "Dashboard — LP Radar" },
+      { name: "description", content: "Vue d'ensemble des 184 landing pages : dépenses, scores et priorités." },
+      { property: "og:title", content: "Dashboard — LP Radar" },
+      { property: "og:description", content: "Vue d'ensemble des 184 landing pages : dépenses, scores et priorités." },
+    ],
+  }),
+  component: Dashboard,
+});
+
+const tip = { contentStyle: { background: "var(--card)", border: "1px solid var(--border)", borderRadius: 8, fontSize: 12 } };
+
+function Dashboard() {
+  const lps = getLPs();
+  const est = estimate(lps);
+  const spend = lps.reduce((s, l) => s + l.spend, 0);
+  const p1Spend = est.p1.reduce((s, l) => s + l.spend, 0);
+  const prio = (["P1", "P2", "P3"] as const).map((p) => ({ p, n: lps.filter((l) => l.priority === p).length }));
+
+  return (
+    <>
+      <PageHeader kicker="Vue d'ensemble" title="Dashboard">
+        <Link to="/rapport" className="btn-primary">Voir le rapport</Link>
+      </PageHeader>
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <Stat label="Landing pages" value={lps.length} hint={`${Object.keys(est.counts).length} templates Shopify`} />
+        <Stat label="Dépense totale" value={eur(spend)} hint="30 derniers jours" />
+        <Stat label="LP prioritaires (P1)" value={est.p1.length} hint={`${Math.round((p1Spend / spend) * 100)} % de la dépense`} />
+        <Stat label="Approche" value={<span className="text-primary text-2xl">{est.approach}</span>} hint={`${est.days} j · ${eur(est.budget)}`} />
+      </div>
+
+      <Panel className="mt-6" title="Workflow de l’analyse">
+        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
+          {[
+            { step: "1", label: "Analyse SEA", target: "/sea", details: "Dépenses, QS, LP Exp, priorisation" },
+            { step: "2", label: "Audit CRO/UX", target: "/cro", details: "Structure, CTA, friction, parcours mobile" },
+            { step: "3", label: "Shopify", target: "/shopify", details: "Templates, sections, scalabilité" },
+            { step: "4", label: "Recommandation", target: "/recommandation", details: "Approche, périmètre, budget, wireframes" },
+            { step: "5", label: "Devis", target: "/devis", details: "Phase 2, planning, livrables" },
+          ].map((item) => (
+            <Link key={item.step} to={item.target as any} className="rounded-md border border-border p-4 transition-colors hover:border-primary/60 hover:bg-muted/40">
+              <p className="font-mono text-xs text-primary">Étape {item.step}</p>
+              <p className="mt-2 font-medium">{item.label}</p>
+              <p className="mt-1 text-xs text-muted-foreground">{item.details}</p>
+            </Link>
+          ))}
+        </div>
+      </Panel>
+
+      <div className="mt-6 grid gap-4 lg:grid-cols-3">
+        <Panel title="Dépense × score CRO/UX (taille = score global)" className="lg:col-span-2">
+          <div className="h-80">
+            <ResponsiveContainer>
+              <ScatterChart margin={{ left: 0, right: 10, top: 10 }}>
+                <CartesianGrid stroke="var(--border)" strokeDasharray="3 3" />
+                <XAxis dataKey="spend" name="Dépense" unit="€" stroke="var(--muted-foreground)" fontSize={11} />
+                <YAxis dataKey="scoreCRO" name="CRO/UX" stroke="var(--muted-foreground)" fontSize={11} />
+                <ZAxis dataKey="scoreGlobal" range={[20, 220]} name="Global" />
+                <Tooltip {...tip} cursor={{ strokeDasharray: "3 3" }} />
+                <Scatter data={lps}>
+                  {lps.map((l) => (
+                    <Cell key={l.id} fill={l.priority === "P1" ? "var(--destructive)" : l.priority === "P2" ? "var(--warn)" : "var(--chart-5)"} fillOpacity={0.75} />
+                  ))}
+                </Scatter>
+              </ScatterChart>
+            </ResponsiveContainer>
+          </div>
+          <p className="mt-2 text-xs text-muted-foreground">En bas à droite : fortes dépenses, faible expérience — à traiter en premier.</p>
+        </Panel>
+        <Panel title="Répartition des priorités">
+          <div className="h-80">
+            <ResponsiveContainer>
+              <BarChart data={prio}>
+                <XAxis dataKey="p" stroke="var(--muted-foreground)" fontSize={12} />
+                <YAxis stroke="var(--muted-foreground)" fontSize={11} />
+                <Tooltip {...tip} cursor={{ fill: "var(--muted)" }} />
+                <Bar dataKey="n" name="LP" radius={[4, 4, 0, 0]}>
+                  {prio.map((p) => (
+                    <Cell key={p.p} fill={p.p === "P1" ? "var(--destructive)" : p.p === "P2" ? "var(--warn)" : "var(--chart-5)"} />
+                  ))}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        </Panel>
+      </div>
+
+      <h2 className="kicker mb-3 mt-10">Priorisation globale</h2>
+      <DataTable
+        rows={[...lps].sort((a, b) => b.scoreGlobal - a.scoreGlobal)}
+        csvName="priorisation.csv"
+        csvRow={(l) => ({ LP: l.url, SEA: l.scoreSEA, CRO: l.scoreCRO, Shopify: l.scoreShopify, Global: l.scoreGlobal, Priorite: l.priority })}
+        filters={[{ label: "Priorité", options: ["P1", "P2", "P3"], get: (l) => l.priority }]}
+        cols={[
+          { key: "url", label: "LP", render: (l) => <span className="font-mono text-xs">{l.url}</span> },
+          { key: "spend", label: "Dépense", render: (l) => eur(l.spend), sort: (l) => l.spend },
+          { key: "sea", label: "Score SEA", render: (l) => <ScorePill v={l.scoreSEA} />, sort: (l) => l.scoreSEA },
+          { key: "cro", label: "Score CRO/UX", render: (l) => <ScorePill v={l.scoreCRO} quality />, sort: (l) => l.scoreCRO },
+          { key: "shop", label: "Score Shopify", render: (l) => <ScorePill v={l.scoreShopify} quality />, sort: (l) => l.scoreShopify },
+          { key: "g", label: "Score global", render: (l) => <ScorePill v={l.scoreGlobal} />, sort: (l) => l.scoreGlobal },
+          { key: "priority", label: "Priorité", sort: (l) => l.priority },
+        ]}
+      />
+    </>
+  );
+}
