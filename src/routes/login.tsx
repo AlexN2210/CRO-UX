@@ -50,10 +50,17 @@ function LoginPage() {
         <p className="kicker">Espace privé</p>
         <h1 className="mt-2 text-2xl font-semibold">Connexion à LP Radar</h1>
         {setupRequired ? (
-          <p className="mt-4 text-sm text-destructive">
-            Accès fermé : configurez APP_ACCESS_PASSWORD (16 caractères minimum) et
-            APP_SESSION_SECRET (32 caractères minimum) dans les secrets du serveur.
-          </p>
+          <div className="mt-4 space-y-3 text-sm">
+            <p className="text-destructive">
+              L’accès reste fermé jusqu’à la configuration des secrets serveur.
+            </p>
+            <p className="text-muted-foreground">
+              Dans Vercel, ouvre <strong>Project Settings → Environment Variables</strong> et
+              ajoute <code>APP_ACCESS_PASSWORD</code> (ton mot de passe, 16 caractères minimum)
+              ainsi que <code>APP_SESSION_SECRET</code> (clé de session aléatoire, 32 caractères minimum).
+              Redéploie ensuite le projet.
+            </p>
+          </div>
         ) : (
           <form className="mt-6 space-y-4" onSubmit={handleSubmit}>
             <label className="block space-y-2 text-sm">

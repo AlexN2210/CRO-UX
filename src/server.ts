@@ -318,9 +318,7 @@ export default {
         !(pathname === "/login" && ["GET", "HEAD"].includes(request.method))
       ) {
         if (!securityConfigured(runtimeEnv)) {
-          return withSecurityHeaders(
-            new Response("Security configuration required.", { status: 503 }),
-          );
+          return withSecurityHeaders(Response.redirect(new URL("/login", request.url), 302));
         }
         const secret = getString(runtimeEnv, "APP_SESSION_SECRET")!;
         if (!(await hasValidSession(request, secret))) {
