@@ -59,14 +59,15 @@ npm run dev
 
 La route racine redirige vers `/login`; après connexion, le bouton du dashboard lance l’analyse sur le serveur.
 
-## Build et démarrage Node
+## Déploiement Vercel
 
 ```sh
 npm run build
-npm start
 ```
 
-Le build utilise `node-server` par défaut. Si ton hébergeur exige un preset Nitro dédié, configure `NITRO_PRESET` pendant le build (par exemple dans les variables CI de l’hébergeur). Le processus écoute sur le port fourni par `PORT` lorsqu’il est défini.
+Le build utilise le preset Vercel de Nitro et génère `.vercel/output` avec les fichiers statiques et la fonction SSR. `vercel.json` déclare ce dossier. Dans les paramètres du projet Vercel, laisse la sortie détectée automatiquement ou mets `.vercel/output` ; ne la laisse pas sur `dist`.
+
+Ajoute `APP_ACCESS_PASSWORD`, `APP_SESSION_SECRET` et les identifiants API comme variables d’environnement serveur dans les paramètres Vercel, pour les environnements Production et Preview nécessaires. Ne les définis jamais comme variables préfixées `VITE_`.
 
 ## Vérification
 
