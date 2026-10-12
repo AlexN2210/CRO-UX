@@ -1,23 +1,44 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { getLPs } from "@/lib/data";
+import { getCurrentLPs } from "@/lib/data";
 import { PageHeader, Stat, Panel, DataTable, ScorePill } from "@/components/ui-kit";
 
 export const Route = createFileRoute("/cro")({
   head: () => ({
     meta: [
       { title: "Audit CRO/UX — LP Radar" },
-      { name: "description", content: "Structure, CTA, réassurance et vitesse Lighthouse de chaque landing page." },
+      {
+        name: "description",
+        content: "Structure, CTA, réassurance et vitesse Lighthouse de chaque landing page.",
+      },
       { property: "og:title", content: "Audit CRO/UX — LP Radar" },
-      { property: "og:description", content: "Structure, CTA, réassurance et vitesse Lighthouse de chaque landing page." },
+      {
+        property: "og:description",
+        content: "Structure, CTA, réassurance et vitesse Lighthouse de chaque landing page.",
+      },
     ],
   }),
   component: CroPage,
 });
 
 function CroPage() {
-  const lps = getLPs();
-  const pct = (f: (l: (typeof lps)[0]) => boolean) => `${Math.round((lps.filter(f).length / lps.length) * 100)} %`;
-  const avg = (f: (l: (typeof lps)[0]) => number) => Math.round(lps.reduce((s, l) => s + f(l), 0) / lps.length);
+  const lps = getCurrentLPs();
+  if (lps.length > 0 && lps.every((lp) => lp.dataCoverage === "sea-only")) {
+    return (
+      <>
+        <PageHeader kicker="Module 3 · Playwright + Lighthouse" title="Audit CRO/UX" />
+        <Panel title="Connecteur requis">
+          <p className="text-sm text-muted-foreground">
+            Les données Google Ads ne contiennent pas les mesures CRO/UX. Aucun score de démo n’est
+            affiché avec les données live.
+          </p>
+        </Panel>
+      </>
+    );
+  }
+  const pct = (f: (l: (typeof lps)[0]) => boolean) =>
+    `${Math.round((lps.filter(f).length / lps.length) * 100)} %`;
+  const avg = (f: (l: (typeof lps)[0]) => number) =>
+    Math.round(lps.reduce((s, l) => s + f(l), 0) / lps.length);
   const issues = [
     { label: "Pas de CTA au-dessus de la ligne de flottaison", v: pct((l) => !l.ctaAboveFold) },
     { label: "Aucun bloc de réassurance", v: pct((l) => !l.reassurance) },
@@ -48,18 +69,71 @@ function CroPage() {
       <DataTable
         rows={lps}
         csvName="cro-ux.csv"
-        csvRow={(l) => ({ LP: l.url, H1: l.h1, H2: l.h2Count, CTA: l.ctaCount, CTAFold: l.ctaAboveFold, Sections: l.sections, Reassurance: l.reassurance, Scroll: l.scrollDepth, Load: l.loadTime, Poids: l.assetWeight, Perf: l.lhPerf, ScoreCRO: l.scoreCRO })}
-        filters={[{ label: "Réassurance", options: ["Oui", "Non"], get: (l) => (l.reassurance ? "Oui" : "Non") }]}
+        csvRow={(l) => ({
+          LP: l.url,
+          H1: l.h1,
+          H2: l.h2Count,
+          CTA: l.ctaCount,
+          CTAFold: l.ctaAboveFold,
+          Sections: l.sections,
+          Reassurance: l.reassurance,
+          Scroll: l.scrollDepth,
+          Load: l.loadTime,
+          Poids: l.assetWeight,
+          Perf: l.lhPerf,
+          ScoreCRO: l.scoreCRO,
+        })}
+        filters={[
+          {
+            label: "Réassurance",
+            options: ["Oui", "Non"],
+            get: (l) => (l.reassurance ? "Oui" : "Non"),
+          },
+        ]}
         cols={[
-          { key: "url", label: "LP", render: (l) => <span className="font-mono text-xs">{l.url}</span> },
+          {
+            key: "url",
+            label: "LP",
+            render: (l) => <span className="font-mono text-xs">{l.url}</span>,
+          },
           { key: "h1", label: "H1", render: (l) => <span className="text-xs">{l.h1}</span> },
-          { key: "cta", label: "CTA", render: (l) => `${l.ctaCount}${l.ctaAboveFold ? " · fold ✓" : " · fold ✗"}`, sort: (l) => l.ctaCount },
+          {
+            key: "cta",
+            label: "CTA",
+            render: (l) => `${l.ctaCount}${l.ctaAboveFold ? " · fold ✓" : " · fold ✗"}`,
+            sort: (l) => l.ctaCount,
+          },
           { key: "sections", label: "Sections", sort: (l) => l.sections },
-          { key: "scroll", label: "Scroll %", render: (l) => l.scrollDepth, sort: (l) => l.scrollDepth },
-          { key: "load", label: "Chargement", render: (l) => `${l.loadTime} s`, sort: (l) => l.loadTime },
-          { key: "w", label: "Poids", render: (l) => `${l.assetWeight} Mo`, sort: (l) => l.assetWeight },
-          { key: "perf", label: "Vitesse", render: (l) => <ScorePill v={l.lhPerf} quality />, sort: (l) => l.lhPerf },
-          { key: "s", label: "Score CRO/UX", render: (l) => <ScorePill v={l.scoreCRO} quality />, sort: (l) => l.scoreCRO },
+          {
+            key: "scroll",
+            label: "Scroll %",
+            render: (l) => l.scrollDepth,
+            sort: (l) => l.scrollDepth,
+          },
+          {
+            key: "load",
+            label: "Chargement",
+            render: (l) => `${l.loadTime} s`,
+            sort: (l) => l.loadTime,
+          },
+          {
+            key: "w",
+            label: "Poids",
+            render: (l) => `${l.assetWeight} Mo`,
+            sort: (l) => l.assetWeight,
+          },
+          {
+            key: "perf",
+            label: "Vitesse",
+            render: (l) => <ScorePill v={l.lhPerf} quality />,
+            sort: (l) => l.lhPerf,
+          },
+          {
+            key: "s",
+            label: "Score CRO/UX",
+            render: (l) => <ScorePill v={l.scoreCRO} quality />,
+            sort: (l) => l.scoreCRO,
+          },
         ]}
       />
     </>

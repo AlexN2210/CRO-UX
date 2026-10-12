@@ -1,22 +1,42 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { Mail, Printer } from "lucide-react";
-import { getLPs, estimate, eur } from "@/lib/data";
+import { getCurrentLPs, estimate, eur } from "@/lib/data";
 import { PageHeader, Panel } from "@/components/ui-kit";
 
 export const Route = createFileRoute("/devis")({
   head: () => ({
     meta: [
       { title: "Devis d’implémentation — LP Radar" },
-      { name: "description", content: "Devis de la phase 2, périmètre, calendrier et livrables pour l’optimisation des landing pages." },
+      {
+        name: "description",
+        content:
+          "Devis de la phase 2, périmètre, calendrier et livrables pour l’optimisation des landing pages.",
+      },
       { property: "og:title", content: "Devis d’implémentation — LP Radar" },
-      { property: "og:description", content: "Phase 2 : devis, périmètre et planning d’implémentation." },
+      {
+        property: "og:description",
+        content: "Phase 2 : devis, périmètre et planning d’implémentation.",
+      },
     ],
   }),
   component: DevisPage,
 });
 
 function DevisPage() {
-  const lps = getLPs();
+  const lps = getCurrentLPs();
+  if (lps.length > 0 && lps.every((lp) => lp.dataCoverage === "sea-only")) {
+    return (
+      <>
+        <PageHeader kicker="Module 7 · Devis" title="Devis d’implémentation" />
+        <Panel>
+          <p className="text-sm text-muted-foreground">
+            Le devis sera calculable après les audits CRO/UX et Shopify. Les données Google Ads
+            seules ne suffisent pas à chiffrer l’implémentation.
+          </p>
+        </Panel>
+      </>
+    );
+  }
   const e = estimate(lps);
   const weekCount = Math.ceil(e.days / 5);
   const mailto = `mailto:contact@agency.example?subject=${encodeURIComponent("Devis d'implémentation LP Radar")}&body=${encodeURIComponent(
@@ -97,7 +117,8 @@ function DevisPage() {
                 <strong>{e.p1.length}</strong> LP prioritaires à auditer et optimiser.
               </li>
               <li className="rounded-md border border-dashed border-border p-3">
-                <strong>{e.sharedTemplates.length}</strong> templates partagés à refondre pour un impact scalable.
+                <strong>{e.sharedTemplates.length}</strong> templates partagés à refondre pour un
+                impact scalable.
               </li>
               <li className="rounded-md border border-dashed border-border p-3">
                 <strong>{e.legacy.length}</strong> LP legacy à traiter individuellement ou migrer.
@@ -112,7 +133,9 @@ function DevisPage() {
             <ol className="space-y-2 text-sm">
               {deliverables.map((d, i) => (
                 <li key={d} className="flex gap-3 rounded-md border border-border p-3">
-                  <span className="font-mono text-xs text-primary">{String(i + 1).padStart(2, "0")}</span>
+                  <span className="font-mono text-xs text-primary">
+                    {String(i + 1).padStart(2, "0")}
+                  </span>
                   <span>{d}</span>
                 </li>
               ))}
@@ -135,7 +158,8 @@ function DevisPage() {
             ))}
           </ol>
           <p className="mt-4 text-sm text-muted-foreground">
-            Cette proposition est alignée avec le workflow SEA → CRO/UX → Shopify → recommandation → devis, et déclenche la phase 2 de mise en œuvre.
+            Cette proposition est alignée avec le workflow SEA → CRO/UX → Shopify → recommandation →
+            devis, et déclenche la phase 2 de mise en œuvre.
           </p>
         </Panel>
       </div>

@@ -2,8 +2,13 @@ export type ProductionMode = "demo" | "hybrid" | "live";
 
 export interface ProductionConfig {
   mode: ProductionMode;
-  googleAdsApiUrl?: string;
-  googleAdsApiKey?: string;
+  googleAdsApiVersion: string;
+  googleAdsDeveloperToken?: string;
+  googleAdsClientId?: string;
+  googleAdsClientSecret?: string;
+  googleAdsRefreshToken?: string;
+  googleAdsCustomerId?: string;
+  googleAdsLoginCustomerId?: string;
   shopifyApiUrl?: string;
   shopifyAccessToken?: string;
   googleAnalyticsApiUrl?: string;
@@ -52,8 +57,13 @@ export function getProductionConfig(
 
   return {
     mode: normalizedMode,
-    googleAdsApiUrl: sanitizeString(env.GOOGLE_ADS_API_URL),
-    googleAdsApiKey: sanitizeString(env.GOOGLE_ADS_API_KEY),
+    googleAdsApiVersion: sanitizeString(env.GOOGLE_ADS_API_VERSION) ?? "v25",
+    googleAdsDeveloperToken: sanitizeString(env.GOOGLE_ADS_DEVELOPER_TOKEN),
+    googleAdsClientId: sanitizeString(env.GOOGLE_ADS_CLIENT_ID),
+    googleAdsClientSecret: sanitizeString(env.GOOGLE_ADS_CLIENT_SECRET),
+    googleAdsRefreshToken: sanitizeString(env.GOOGLE_ADS_REFRESH_TOKEN),
+    googleAdsCustomerId: sanitizeString(env.GOOGLE_ADS_CUSTOMER_ID),
+    googleAdsLoginCustomerId: sanitizeString(env.GOOGLE_ADS_LOGIN_CUSTOMER_ID),
     shopifyApiUrl: sanitizeString(env.SHOPIFY_API_URL),
     shopifyAccessToken: sanitizeString(env.SHOPIFY_ACCESS_TOKEN),
     googleAnalyticsApiUrl: sanitizeString(env.GA4_API_URL),
@@ -69,8 +79,13 @@ export function getDataSources(config: ProductionConfig): ProductionDataSource[]
   return [
     {
       name: "Google Ads",
-      url: config.googleAdsApiUrl,
-      configured: Boolean(config.googleAdsApiUrl && config.googleAdsApiKey),
+      configured: Boolean(
+        config.googleAdsDeveloperToken &&
+        config.googleAdsClientId &&
+        config.googleAdsClientSecret &&
+        config.googleAdsRefreshToken &&
+        config.googleAdsCustomerId,
+      ),
     },
     {
       name: "Shopify Admin",
@@ -95,7 +110,7 @@ export function resolveProductionStatus(config: ProductionConfig) {
   const configured = dataSources.filter((source) => source.configured);
 
   return {
-    readyForProduction: configured.length >= 2,
+    readyForProduction: configured.length >= 1,
     mode: config.mode,
     configuredSources: configured.map((source) => source.name),
     missingSources: dataSources.filter((source) => !source.configured).map((source) => source.name),

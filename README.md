@@ -10,7 +10,8 @@ Dans le panneau de configuration de ton hébergeur, ajoute ces variables au serv
 
 - `APP_ACCESS_PASSWORD` : ton mot de passe unique, au moins 16 caractères.
 - `APP_SESSION_SECRET` : secret aléatoire d’au moins 32 caractères. Le changer invalide toutes les sessions.
-- `GOOGLE_ADS_API_KEY`, `SHOPIFY_ACCESS_TOKEN`, `GA4_API_KEY`, `SEARCH_CONSOLE_API_KEY` : credentials de leurs adaptateurs serveur respectifs.
+- Google Ads : `GOOGLE_ADS_DEVELOPER_TOKEN`, `GOOGLE_ADS_CLIENT_ID`, `GOOGLE_ADS_CLIENT_SECRET`, `GOOGLE_ADS_REFRESH_TOKEN`, `GOOGLE_ADS_CUSTOMER_ID` et, si nécessaire, `GOOGLE_ADS_LOGIN_CUSTOMER_ID`.
+- Shopify / GA4 / Search Console : credentials de leurs adaptateurs serveur respectifs (`SHOPIFY_ACCESS_TOKEN`, `GA4_API_KEY`, `SEARCH_CONSOLE_API_KEY`).
 
 Générer une valeur de session localement avec Node.js :
 
@@ -18,7 +19,7 @@ Générer une valeur de session localement avec Node.js :
 node -e "console.log(require('crypto').randomBytes(48).toString('base64url'))"
 ```
 
-Ne partage jamais leurs valeurs dans un ticket, une capture d’écran ou une conversation et ne les préfixe jamais par `VITE_`. Les URLs non secrètes sont également des variables serveur : `ANALYSIS_MODE`, `GOOGLE_ADS_API_URL`, `SHOPIFY_API_URL`, `GA4_API_URL`, `SEARCH_CONSOLE_API_URL` et `DATA_API_ALLOWED_HOSTS`. Les URLs doivent être en HTTPS et leur nom d’hôte exact doit être inscrit dans `DATA_API_ALLOWED_HOSTS` (liste séparée par des virgules). Cela réduit le risque de requêtes SSRF vers des ressources internes.
+Ne partage jamais leurs valeurs dans un ticket, une capture d’écran ou une conversation et ne les préfixe jamais par `VITE_`. Le connecteur Google Ads natif utilise `GOOGLE_ADS_API_VERSION` (par défaut `v25`) et ne nécessite ni `GOOGLE_ADS_API_URL` ni clé API classique. Les adaptateurs des autres sources utilisent les URLs serveur `SHOPIFY_API_URL`, `GA4_API_URL` et `SEARCH_CONSOLE_API_URL`; leurs hôtes HTTPS doivent être listés dans `DATA_API_ALLOWED_HOSTS` (noms d’hôte séparés par des virgules).
 
 ## Protections incluses
 
@@ -36,9 +37,17 @@ La limitation locale des tentatives est best-effort et ne remplace pas une règl
 
 Les rapports affichent des données métier aux utilisateurs connectés. N’accordez donc l’accès qu’aux personnes autorisées et ne mettez pas de données personnelles inutiles dans les réponses des adaptateurs.
 
-## Contrat des adaptateurs API
+## Connexion Google Ads
 
-Chaque URL configurée doit pointer vers un adaptateur backend de confiance qui renvoie des landing pages au format utilisé par l’application : tableau JSON direct, ou propriété `lps`, `landingPages` ou `data`. Les clés sont transmises de serveur à serveur dans les en-têtes d’authentification. Ne branchez pas directement des identifiants Google Ads comme s’il s’agissait d’une simple clé API : Google Ads requiert notamment OAuth et un developer token. Les intégrations officielles doivent être implémentées dans les adaptateurs serveur correspondants.
+Pour obtenir les valeurs, active Google Ads API sur un projet Google Cloud et crée un client OAuth de type application Web. Autorise l’accès Google Ads avec le scope `https://www.googleapis.com/auth/adwords`, puis obtiens un refresh token avec accès hors ligne. Dans Google Ads, récupère le developer token depuis API Center et le Customer ID du compte à lire. Attribue au compte Google OAuth un rôle de lecture seule si cela suffit à ton audit.
+
+Ajoute dans Vercel `GOOGLE_ADS_DEVELOPER_TOKEN`, `GOOGLE_ADS_CLIENT_ID`, `GOOGLE_ADS_CLIENT_SECRET`, `GOOGLE_ADS_REFRESH_TOKEN` et `GOOGLE_ADS_CUSTOMER_ID`; ajoute `GOOGLE_ADS_LOGIN_CUSTOMER_ID` seulement si le compte est consulté via un compte administrateur. Mets `ANALYSIS_MODE=live`, puis redéploie. Ne saisis aucune de ces valeurs dans l’interface web et ne les transmets pas dans le chat.
+
+Le serveur échange le refresh token contre un access token auprès de Google OAuth, puis interroge l’API Google Ads REST v25 avec `landing_page_view` sur les 30 derniers jours. Il agrège dépenses, impressions, clics, CTR et conversions par URL finale. Le developer token doit avoir l’accès API nécessaire au compte; Google peut limiter un token en mode test ou exiger une demande d’accès supérieur.
+
+Les résultats Google Ads ont une couverture **SEA uniquement**. Les vues CRO/UX, Shopify, recommandation et devis restent masquées avec cette seule source; elles ne sont pas estimées à partir de valeurs fictives.
+
+Les URLs Shopify, GA4 et Search Console configurées doivent pointer vers des adaptateurs backend de confiance qui renvoient des landing pages au format utilisé par l’application : tableau JSON direct, ou propriété `lps`, `landingPages` ou `data`.
 
 ## Développement local
 
