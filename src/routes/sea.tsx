@@ -32,12 +32,20 @@ function SeaPage() {
     "campaigns" | "keywords" | "searchTerms" | "landingPages" | "conversions" | "lpQuality" | "meta"
   >("landingPages");
   const seaOnly = lps.length > 0 && lps.every((lp) => lp.dataCoverage === "sea-only");
+  const hasSpendData = lps.some((lp) => lp.spend > 0);
+  const hasImpressionData = lps.some((lp) => lp.impressions > 0);
+  const hasClickData = lps.some((lp) => lp.clicks > 0);
+  const qualityPages = lps.filter((lp) => lp.qs > 0);
+  const hasQualityData = qualityPages.length > 0;
   const spend = lps.reduce((s, l) => s + l.spend, 0);
   const avg = (f: (l: (typeof lps)[0]) => number) =>
     (lps.reduce((s, l) => s + f(l), 0) / lps.length).toFixed(1);
+  const avgQuality = hasQualityData
+    ? (qualityPages.reduce((total, lp) => total + lp.qs, 0) / qualityPages.length).toFixed(1)
+    : "N/D";
   const qsDist = Array.from({ length: 10 }, (_, i) => ({
     qs: i + 1,
-    n: lps.filter((l) => l.qs === i + 1).length,
+    n: qualityPages.filter((lp) => Math.round(lp.qs) === i + 1).length,
   }));
   const camps = Object.entries(
     lps.reduce<Record<string, number>>(
@@ -83,33 +91,48 @@ function SeaPage() {
         </Panel>
       )}
       {seaOnly && (
-        <Panel className="mb-6" title="Données Google Ads · 30 derniers jours">
+        <Panel
+          className="mb-6"
+          title={
+            csvBundle ? "Données des exports Google Ads" : "Données Google Ads · 30 derniers jours"
+          }
+        >
           <p className="text-sm text-muted-foreground">
-            Les valeurs Quality Score et expérience de la page ne sont pas fournies par le rapport
-            Landing Page View. Seuls les clics, impressions, dépenses, CTR et conversions ci-dessous
-            sont issus de Google Ads.
+            {csvBundle
+              ? "Les métriques ci-dessous sont calculées à partir des sept exports importés. Le Quality Score et l’expérience LP sont affichés lorsqu’ils sont présents dans LP_Quality."
+              : "Seuls les clics, impressions, dépenses, CTR et conversions ci-dessous sont fournis par le rapport Google Ads Landing Page View."}
           </p>
         </Panel>
       )}
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <Stat label="Dépense" value={eur(spend)} />
+        <Stat
+          label="Dépense"
+          value={hasSpendData ? eur(spend) : "N/D"}
+          hint={hasSpendData ? undefined : "Colonne de dépense non reconnue"}
+        />
         <Stat
           label="QS moyen"
-          value={seaOnly ? "N/D" : avg((l) => l.qs)}
-          hint={seaOnly ? "Non fourni par cette requête" : "/10"}
+          value={avgQuality}
+          hint={hasQualityData ? "/10" : "Non fourni ou non reconnu"}
         />
-        <Stat label="CTR moyen" value={`${avg((l) => l.ctr)} %`} />
+        <Stat
+          label="CTR moyen"
+          value={hasImpressionData ? `${avg((l) => l.ctr)} %` : "N/D"}
+          hint={hasImpressionData ? undefined : "Colonne Impressions non reconnue"}
+        />
         <Stat
           label="CVR moyen"
-          value={`${avg((l) => l.cvr)} %`}
-          hint={seaOnly ? "Conversions / clics" : undefined}
+          value={hasClickData ? `${avg((l) => l.cvr)} %` : "N/D"}
+          hint={hasClickData ? "Conversions / clics" : "Colonne Clics non reconnue"}
         />
       </div>
       <div className="mt-6 grid gap-4 lg:grid-cols-2">
-        {seaOnly ? (
+        {!hasQualityData ? (
           <Panel title="Quality Score indisponible">
             <p className="text-sm text-muted-foreground">
-              La ressource Landing Page View ne retourne pas le Quality Score.
+              {csvBundle
+                ? "Aucun Quality Score reconnu dans les exports LP_Quality ou Keywords."
+                : "La ressource Landing Page View ne retourne pas le Quality Score."}
             </p>
           </Panel>
         ) : (
@@ -127,22 +150,29 @@ function SeaPage() {
           </Panel>
         )}
         <Panel title="Dépense par campagne">
-          <div className="h-56">
-            <ResponsiveContainer>
-              <BarChart data={camps} layout="vertical">
-                <XAxis type="number" stroke="var(--muted-foreground)" fontSize={11} />
-                <YAxis
-                  type="category"
-                  dataKey="c"
-                  width={150}
-                  stroke="var(--muted-foreground)"
-                  fontSize={11}
-                />
-                <Tooltip {...tip} cursor={{ fill: "var(--muted)" }} />
-                <Bar dataKey="s" name="€" fill="var(--chart-2)" radius={[0, 4, 4, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
+          {hasSpendData ? (
+            <div className="h-56">
+              <ResponsiveContainer>
+                <BarChart data={camps} layout="vertical">
+                  <XAxis type="number" stroke="var(--muted-foreground)" fontSize={11} />
+                  <YAxis
+                    type="category"
+                    dataKey="c"
+                    width={150}
+                    stroke="var(--muted-foreground)"
+                    fontSize={11}
+                  />
+                  <Tooltip {...tip} cursor={{ fill: "var(--muted)" }} />
+                  <Bar dataKey="s" name="€" fill="var(--chart-2)" radius={[0, 4, 4, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          ) : (
+            <p className="text-sm text-muted-foreground">
+              Aucune dépense reconnue. Consulte l’avertissement d’import pour les colonnes
+              détectées.
+            </p>
+          )}
         </Panel>
       </div>
       <h2 className="kicker mb-3 mt-10">Landing pages Search</h2>
@@ -155,6 +185,7 @@ function SeaPage() {
                 LP: l.url,
                 Campagne: l.campaign,
                 Depense: l.spend,
+                ...(hasQualityData ? { QS: l.qs, LPExp: l.lpExp } : {}),
                 Clics: l.clicks,
                 Impressions: l.impressions,
                 Conversions: l.conversions,
@@ -181,7 +212,7 @@ function SeaPage() {
             options: [...new Set(lps.map((l) => l.campaign))],
             get: (l) => l.campaign,
           },
-          ...(!seaOnly
+          ...(hasQualityData
             ? [
                 {
                   label: "LP Exp",
@@ -198,12 +229,12 @@ function SeaPage() {
             render: (l) => <span className="font-mono text-xs">{l.url}</span>,
           },
           { key: "spend", label: "Spend", render: (l) => eur(l.spend), sort: (l) => l.spend },
-          ...(seaOnly
-            ? []
-            : [
+          ...(hasQualityData
+            ? [
                 { key: "qs", label: "QS", sort: (l: (typeof lps)[number]) => l.qs },
                 { key: "lpExp", label: "LP Exp", sort: (l: (typeof lps)[number]) => l.lpExp },
-              ]),
+              ]
+            : []),
           ...(seaOnly
             ? [
                 { key: "clicks", label: "Clics", sort: (l: (typeof lps)[number]) => l.clicks },

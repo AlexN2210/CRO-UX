@@ -167,6 +167,30 @@ describe("recommandation", () => {
     });
   });
 
+  it("complète les métriques absentes de Landing Pages avec celles des autres exports", () => {
+    const bundle = createGoogleAdsCsvBundle({
+      landingPages: "Final URL;Page title\nhttps://store.example/run;Running shoes",
+      campaigns:
+        "Campaign;Final URL;Clicks;Impressions;Cost\nBrand;https://store.example/run;120;2400;36.50",
+    });
+
+    expect(bundle.lps[0]).toMatchObject({
+      url: "https://store.example/run",
+      clicks: 120,
+      impressions: 2400,
+      spend: 36.5,
+      campaign: "Brand",
+    });
+  });
+
+  it("signale les en-têtes de métriques non reconnus au lieu de masquer l’absence de données", () => {
+    const bundle = createGoogleAdsCsvBundle({
+      landingPages: "Final URL;Spend amount;Visits\nhttps://store.example/run;36.50;120",
+    });
+
+    expect(bundle.warnings.join(" ")).toContain("Spend amount, Visits");
+  });
+
   it("appelle les adaptateurs autorisés avec leur token privé et exige le format LP normalisé", async () => {
     const sourceLp = { ...getLPs()[0], id: 71, url: "https://store.example/pages/live" };
     const fetchMock = vi.fn<typeof fetch>(async (_input, init) => {

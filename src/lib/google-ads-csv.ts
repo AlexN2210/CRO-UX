@@ -146,17 +146,38 @@ function getAdGroup(row: GoogleAdsCsvRow): string {
 }
 
 function getSpend(row: GoogleAdsCsvRow): number {
-  const micros = firstValue(row, ["Cost micros", "Cost (micros)", "Coût micros"]);
+  const micros = firstValue(row, [
+    "Cost micros",
+    "Cost (micros)",
+    "Total cost micros",
+    "metrics.cost_micros",
+    "Coût micros",
+  ]);
   if (micros) return parseNumber(micros) / 1_000_000;
-  return parseNumber(firstValue(row, ["Cost", "Spend", "Cost (converted)", "Coût", "Dépenses"]));
+  return parseNumber(
+    firstValue(row, [
+      "Cost",
+      "Total cost",
+      "Spend",
+      "Amount spent",
+      "Cost (converted)",
+      "Coût",
+      "Coût total",
+      "Dépenses",
+    ]),
+  );
 }
 
 function getClicks(row: GoogleAdsCsvRow): number {
-  return parseNumber(firstValue(row, ["Clicks", "Clics"]));
+  return parseNumber(
+    firstValue(row, ["Clicks", "Total clicks", "metrics.clicks", "Clics", "Total clics"]),
+  );
 }
 
 function getImpressions(row: GoogleAdsCsvRow): number {
-  return parseNumber(firstValue(row, ["Impressions", "Impr.", "Impressions"]));
+  return parseNumber(
+    firstValue(row, ["Impressions", "Total impressions", "metrics.impressions", "Impr."]),
+  );
 }
 
 function getConversions(row: GoogleAdsCsvRow): number {
@@ -167,6 +188,7 @@ function getConversions(row: GoogleAdsCsvRow): number {
       "Conv.",
       "All conversions",
       "Toutes les conversions",
+      "metrics.conversions",
       "Conversions (by conv. time)",
     ]),
   );
@@ -304,14 +326,22 @@ export function createGoogleAdsCsvBundle(files: {
     );
 
   const lps: LP[] = [...allUrls].map((url, index) => {
-    const metrics =
-      lpMetrics.get(url) ??
-      keywordMetrics.get(url) ??
-      campaignMetrics.get(url) ??
-      searchMetrics.get(url) ??
-      conversionMetrics.get(url) ??
-      qualityMetrics.get(url) ??
-      metaMetrics.get(url)!;
+    const metricSources = [
+      lpMetrics.get(url),
+      keywordMetrics.get(url),
+      campaignMetrics.get(url),
+      searchMetrics.get(url),
+    ].filter((source) => source !== undefined);
+    const firstAvailable = (metric: "spend" | "clicks" | "impressions" | "conversions") =>
+      metricSources.find((source) => source[metric] > 0)?.[metric] ?? 0;
+    const metrics = {
+      spend: firstAvailable("spend"),
+      clicks: firstAvailable("clicks"),
+      impressions: firstAvailable("impressions"),
+      conversions: firstAvailable("conversions"),
+      campaigns: new Set(metricSources.flatMap((source) => [...source.campaigns])),
+      adGroups: new Set(metricSources.flatMap((source) => [...source.adGroups])),
+    };
     const qualityRows = [...lpQuality, ...keywords].filter((row) => getRowUrl(row) === url);
     const qualities = qualityRows
       .map(getQualityScore)
@@ -371,6 +401,26 @@ export function createGoogleAdsCsvBundle(files: {
       template: "Non analysé",
     };
   });
+
+  const performanceHeaders = [
+    ...new Set(
+      [landingPages, campaigns, keywords, searchTerms]
+        .flatMap((rows) => (rows[0] ? Object.keys(rows[0]) : []))
+        .filter(Boolean),
+    ),
+  ];
+  const missingMetrics = [
+    [lps.some((lp) => lp.spend > 0), "dépense"],
+    [lps.some((lp) => lp.clicks > 0), "clics"],
+    [lps.some((lp) => lp.impressions > 0), "impressions"],
+  ]
+    .filter(([found]) => !found)
+    .map(([, label]) => label);
+  if (missingMetrics.length > 0) {
+    warnings.push(
+      `Aucune valeur reconnue pour ${missingMetrics.join(", ")}. En-têtes des exports : ${performanceHeaders.join(", ") || "aucun"}.`,
+    );
+  }
 
   return {
     campaigns,
