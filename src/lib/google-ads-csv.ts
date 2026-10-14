@@ -232,6 +232,18 @@ function getConversions(row: GoogleAdsCsvRow): number {
   );
 }
 
+function getReportedConversionRate(row: GoogleAdsCsvRow): number | undefined {
+  const rawRate = firstValue(row, [
+    "Conversion Rate",
+    "ConversionRate",
+    "Conv. rate",
+    "Taux de conversion",
+  ]);
+  if (rawRate === undefined) return undefined;
+  const rate = parseNumber(rawRate);
+  return rawRate.includes("%") || rate > 1 ? rate : rate * 100;
+}
+
 function getQualityScore(row: GoogleAdsCsvRow): number | undefined {
   const value = parseNumber(
     firstValue(row, [
@@ -271,6 +283,8 @@ function aggregateRows(rows: GoogleAdsCsvRow[]) {
       clicks: number;
       impressions: number;
       conversions: number;
+      reportedConversionRateTotal: number;
+      reportedConversionRateWeight: number;
       campaigns: Set<string>;
       adGroups: Set<string>;
     }
@@ -284,13 +298,22 @@ function aggregateRows(rows: GoogleAdsCsvRow[]) {
       clicks: 0,
       impressions: 0,
       conversions: 0,
+      reportedConversionRateTotal: 0,
+      reportedConversionRateWeight: 0,
       campaigns: new Set<string>(),
       adGroups: new Set<string>(),
     };
+    const clicks = getClicks(row);
     current.spend += getSpend(row);
-    current.clicks += getClicks(row);
+    current.clicks += clicks;
     current.impressions += getImpressions(row);
     current.conversions += getConversions(row);
+    const reportedRate = getReportedConversionRate(row);
+    if (reportedRate !== undefined) {
+      const weight = clicks || 1;
+      current.reportedConversionRateTotal += reportedRate * weight;
+      current.reportedConversionRateWeight += weight;
+    }
     if (getCampaign(row)) current.campaigns.add(getCampaign(row));
     if (getAdGroup(row)) current.adGroups.add(getAdGroup(row));
     byUrl.set(url, current);
@@ -378,6 +401,12 @@ export function createGoogleAdsCsvBundle(files: {
       clicks: firstAvailable("clicks"),
       impressions: firstAvailable("impressions"),
       conversions: firstAvailable("conversions"),
+      reportedCvr: metricSources.find((source) => source.reportedConversionRateWeight > 0)
+        ? (() => {
+            const source = metricSources.find((item) => item.reportedConversionRateWeight > 0)!;
+            return source.reportedConversionRateTotal / source.reportedConversionRateWeight;
+          })()
+        : undefined,
       campaigns: new Set(metricSources.flatMap((source) => [...source.campaigns])),
       adGroups: new Set(metricSources.flatMap((source) => [...source.adGroups])),
     };
@@ -398,7 +427,10 @@ export function createGoogleAdsCsvBundle(files: {
       ? conversionMetrics.get(url)!.conversions
       : metrics.conversions;
     const ctr = impressions ? (clicks / impressions) * 100 : 0;
-    const cvr = clicks ? (conversionCount / clicks) * 100 : 0;
+    const cvr =
+      conversionCount > 0 && clicks > 0
+        ? (conversionCount / clicks) * 100
+        : (metrics.reportedCvr ?? (clicks ? (conversionCount / clicks) * 100 : 0));
     const cpc = clicks ? spend / clicks : 0;
     const seaScore = Math.round(
       Math.min(

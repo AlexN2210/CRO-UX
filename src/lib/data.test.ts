@@ -1,5 +1,5 @@
 import { afterEach, describe, it, expect, vi } from "vitest";
-import { recommendApproach, getLPs } from "./data";
+import { recommendApproach, getLPs, weightedConversionRate } from "./data";
 import { createAnalysisPlan, getProductionConfig } from "./production";
 import { createGoogleAdsCsvBundle, parseGoogleAdsCsv } from "./google-ads-csv";
 import {
@@ -30,6 +30,15 @@ describe("recommandation", () => {
   });
   it("traite 184 landing pages", () => {
     expect(getLPs()).toHaveLength(184);
+  });
+
+  it("calcule le CVR global pondéré par le nombre de clics", () => {
+    expect(
+      weightedConversionRate([
+        { clicks: 100, cvr: 1 },
+        { clicks: 900, cvr: 10 },
+      ]),
+    ).toBeCloseTo(9.1);
   });
 
   it("produit un plan d'analyse prêt pour la production", () => {
@@ -210,6 +219,15 @@ describe("recommandation", () => {
       qs: 8,
       lpExp: "Au-dessus",
     });
+  });
+
+  it("utilise le ConversionRate exporté quand le rapport n’a pas de compte conversions", () => {
+    const bundle = createGoogleAdsCsvBundle({
+      landingPages:
+        "Final URL;Clicks;Impressions;Cost;ConversionRate\nhttps://store.example/run;200;4000;80;2.5%",
+    });
+
+    expect(bundle.lps[0].cvr).toBe(2.5);
   });
 
   it("appelle les adaptateurs autorisés avec leur token privé et exige le format LP normalisé", async () => {

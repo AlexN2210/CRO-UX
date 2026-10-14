@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useState } from "react";
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip } from "recharts";
-import { eur } from "@/lib/data";
+import { eur, weightedConversionRate } from "@/lib/data";
 import { getCurrentLPs, getImportedGoogleAdsCsv } from "@/lib/analysis-session";
 import { PageHeader, Stat, Panel, DataTable, ScorePill } from "@/components/ui-kit";
 import type { GoogleAdsCsvRow } from "@/lib/google-ads-csv";
@@ -40,6 +40,7 @@ function SeaPage() {
   const spend = lps.reduce((s, l) => s + l.spend, 0);
   const avg = (f: (l: (typeof lps)[0]) => number) =>
     (lps.reduce((s, l) => s + f(l), 0) / lps.length).toFixed(1);
+  const overallCvr = weightedConversionRate(lps);
   const avgQuality = hasQualityData
     ? (qualityPages.reduce((total, lp) => total + lp.qs, 0) / qualityPages.length).toFixed(1)
     : "N/D";
@@ -122,7 +123,7 @@ function SeaPage() {
         />
         <Stat
           label="CVR moyen"
-          value={hasClickData ? `${avg((l) => l.cvr)} %` : "N/D"}
+          value={overallCvr === null ? "N/D" : `${overallCvr.toFixed(1)} %`}
           hint={hasClickData ? "Conversions / clics" : "Colonne Clics non reconnue"}
         />
       </div>

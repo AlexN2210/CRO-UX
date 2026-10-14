@@ -179,6 +179,12 @@ export function priorityOf(g: number): LP["priority"] {
   return g >= 60 ? "P1" : g >= 45 ? "P2" : "P3";
 }
 
+export function weightedConversionRate(lps: Pick<LP, "clicks" | "cvr">[]): number | null {
+  const totalClicks = lps.reduce((total, lp) => total + lp.clicks, 0);
+  if (totalClicks === 0) return null;
+  return lps.reduce((total, lp) => total + lp.cvr * lp.clicks, 0) / totalClicks;
+}
+
 export type Approach = "Optimisation template" | "Optimisation individuelle" | "Approche hybride";
 
 /** Share of LPs on the dominant shared templates decides the approach. */
