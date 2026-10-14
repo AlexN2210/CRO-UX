@@ -29,7 +29,7 @@ function SeaPage() {
   const lps = getCurrentLPs();
   const csvBundle = getImportedGoogleAdsCsv();
   const [activeCsvTab, setActiveCsvTab] = useState<
-    "campaigns" | "keywords" | "searchTerms" | "landingPages"
+    "campaigns" | "keywords" | "searchTerms" | "landingPages" | "conversions" | "lpQuality" | "meta"
   >("landingPages");
   const seaOnly = lps.length > 0 && lps.every((lp) => lp.dataCoverage === "sea-only");
   const spend = lps.reduce((s, l) => s + l.spend, 0);
@@ -57,6 +57,31 @@ function SeaPage() {
   return (
     <>
       <PageHeader kicker="Module 2 · Google Ads" title="Analyse SEA" />
+      {csvBundle && (
+        <Panel className="mb-6" title="Import Google Ads terminé">
+          <p className="text-sm text-muted-foreground">
+            {[
+              `${csvBundle.lps.length} landing pages analysées`,
+              `${csvBundle.campaigns.length} campagnes`,
+              `${csvBundle.keywords.length} mots-clés`,
+              `${csvBundle.searchTerms.length} requêtes`,
+              `${csvBundle.landingPages.length} lignes de pages de destination`,
+              `${csvBundle.conversions.length} lignes de conversions`,
+              `${csvBundle.lpQuality.length} lignes LP_Quality`,
+              `${csvBundle.meta.length} lignes Meta`,
+            ].join(" · ")}
+          </p>
+          <p className="mt-2 text-sm text-muted-foreground">
+            Cette importation couvre le SEA. Les audits CRO/UX, Shopify, GA4 et vitesse nécessitent
+            leurs propres données.
+          </p>
+          {csvBundle.warnings.map((warning) => (
+            <p key={warning} className="mt-2 text-sm text-muted-foreground">
+              {warning}
+            </p>
+          ))}
+        </Panel>
+      )}
       {seaOnly && (
         <Panel className="mb-6" title="Données Google Ads · 30 derniers jours">
           <p className="text-sm text-muted-foreground">
@@ -225,6 +250,9 @@ function SeaPage() {
                 ["keywords", `Mots-clés (${csvBundle.keywords.length})`],
                 ["searchTerms", `Requêtes (${csvBundle.searchTerms.length})`],
                 ["landingPages", `Landing pages (${csvBundle.landingPages.length})`],
+                ["conversions", `Conversions (${csvBundle.conversions.length})`],
+                ["lpQuality", `LP_Quality (${csvBundle.lpQuality.length})`],
+                ["meta", `Meta (${csvBundle.meta.length})`],
               ] as const
             ).map(([tab, label]) => (
               <button

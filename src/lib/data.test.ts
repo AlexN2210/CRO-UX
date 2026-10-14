@@ -143,6 +143,30 @@ describe("recommandation", () => {
     expect(bundle.lps[0].spend).toBe(25.5);
   });
 
+  it("importe les sept exports Google Ads Script et rattache conversions et LP Quality par URL", () => {
+    const bundle = createGoogleAdsCsvBundle({
+      campaigns: "Campaign;Landing page URL;Clicks\nBrand;https://store.example/run;100",
+      keywords: "Keyword;Landing page URL;Clicks\nrun shoes;https://store.example/run;50",
+      searchTerms: "Search term;Landing page URL;Clicks\nshoes;https://store.example/run;30",
+      landingPages: "Final URL;Clicks;Impressions;Cost\nhttps://store.example/run;100;2000;25",
+      conversions: "Landing page URL;Conversions\nhttps://store.example/run;12",
+      lpQuality:
+        "Landing page URL;Quality Score;Landing page experience\nhttps://store.example/run;8;Above average",
+      meta: "Landing page URL;Title;Description\nhttps://store.example/run;Running shoes;Shop running",
+    });
+
+    expect(bundle.conversions).toHaveLength(1);
+    expect(bundle.lpQuality).toHaveLength(1);
+    expect(bundle.meta).toHaveLength(1);
+    expect(bundle.lps).toHaveLength(1);
+    expect(bundle.lps[0]).toMatchObject({
+      url: "https://store.example/run",
+      conversions: 12,
+      qs: 8,
+      lpExp: "Au-dessus",
+    });
+  });
+
   it("appelle les adaptateurs autorisés avec leur token privé et exige le format LP normalisé", async () => {
     const sourceLp = { ...getLPs()[0], id: 71, url: "https://store.example/pages/live" };
     const fetchMock = vi.fn<typeof fetch>(async (_input, init) => {

@@ -1,4 +1,4 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
 import {
   ResponsiveContainer,
@@ -71,13 +71,25 @@ const emptyGoogleAdsCredentials: GoogleAdsCredentials = {
 };
 
 function Dashboard() {
+  const navigate = useNavigate();
   const [analysisLps, setAnalysisLps] = useState(getCurrentLPs());
   const [selectedCsvFiles, setSelectedCsvFiles] = useState<{
     campaigns: File | null;
     keywords: File | null;
     searchTerms: File | null;
     landingPages: File | null;
-  }>({ campaigns: null, keywords: null, searchTerms: null, landingPages: null });
+    conversions: File | null;
+    lpQuality: File | null;
+    meta: File | null;
+  }>({
+    campaigns: null,
+    keywords: null,
+    searchTerms: null,
+    landingPages: null,
+    conversions: null,
+    lpQuality: null,
+    meta: null,
+  });
   const [csvBundle, setCsvBundle] = useState<GoogleAdsCsvBundle | null>(() =>
     getImportedGoogleAdsCsv(),
   );
@@ -116,8 +128,9 @@ function Dashboard() {
         setCsvBundle(imported);
         setAnalysisLps(imported.lps);
         setAnalysisMessage(
-          `Import terminé : ${imported.lps.length} LP, ${imported.campaigns.length} campagnes, ${imported.keywords.length} mots-clés, ${imported.searchTerms.length} requêtes.`,
+          `Import terminé : ${imported.lps.length} LP, ${imported.campaigns.length} campagnes, ${imported.keywords.length} mots-clés, ${imported.searchTerms.length} requêtes, ${imported.landingPages.length} pages, ${imported.conversions.length} conversions, ${imported.lpQuality.length} LP Quality, ${imported.meta.length} lignes Meta.`,
         );
+        await navigate({ to: "/sea" });
       } catch (error) {
         setAnalysisMessage(error instanceof Error ? error.message : "Impossible de lire les CSV.");
       } finally {
@@ -226,6 +239,9 @@ function Dashboard() {
               ["keywords", "Mots-clés (avec QS / expérience LP)"],
               ["searchTerms", "Requêtes de recherche"],
               ["landingPages", "Landing pages (URLs finales et métriques)"],
+              ["conversions", "Conversions"],
+              ["lpQuality", "LP_Quality (Quality Score / expérience)"],
+              ["meta", "Meta"],
             ] as const
           ).map(([kind, label]) => (
             <label key={kind} className="space-y-1 text-sm text-muted-foreground">

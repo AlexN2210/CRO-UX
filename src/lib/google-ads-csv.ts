@@ -8,6 +8,9 @@ export type GoogleAdsCsvBundle = {
   keywords: GoogleAdsCsvRow[];
   searchTerms: GoogleAdsCsvRow[];
   landingPages: GoogleAdsCsvRow[];
+  conversions: GoogleAdsCsvRow[];
+  lpQuality: GoogleAdsCsvRow[];
+  meta: GoogleAdsCsvRow[];
   lps: LP[];
   warnings: string[];
 };
@@ -157,12 +160,29 @@ function getImpressions(row: GoogleAdsCsvRow): number {
 }
 
 function getConversions(row: GoogleAdsCsvRow): number {
-  return parseNumber(firstValue(row, ["Conversions", "Conv.", "Conversions (by conv. time)"]));
+  return parseNumber(
+    firstValue(row, [
+      "Conversions",
+      "Conversion",
+      "Conv.",
+      "All conversions",
+      "Toutes les conversions",
+      "Conversions (by conv. time)",
+    ]),
+  );
 }
 
 function getQualityScore(row: GoogleAdsCsvRow): number | undefined {
   const value = parseNumber(
-    firstValue(row, ["Quality Score", "Quality score", "Niveau de qualité", "QS"]),
+    firstValue(row, [
+      "Quality Score",
+      "Quality score",
+      "LP Quality",
+      "LP Quality Score",
+      "Score qualité LP",
+      "Niveau de qualité",
+      "QS",
+    ]),
   );
   return value > 0 ? value : undefined;
 }
@@ -171,6 +191,7 @@ function getLandingExperience(row: GoogleAdsCsvRow): LP["lpExp"] | undefined {
   const value = normalizeHeader(
     firstValue(row, [
       "Landing page experience",
+      "LP experience",
       "Exp. landing page",
       "Expérience sur la page de destination",
     ]) ?? "",
@@ -222,19 +243,21 @@ export function createGoogleAdsCsvBundle(files: {
   keywords?: string;
   searchTerms?: string;
   landingPages?: string;
+  conversions?: string;
+  lpQuality?: string;
+  meta?: string;
 }): GoogleAdsCsvBundle {
   const campaigns = files.campaigns ? parseGoogleAdsCsv(files.campaigns) : [];
   const keywords = files.keywords ? parseGoogleAdsCsv(files.keywords) : [];
   const searchTerms = files.searchTerms ? parseGoogleAdsCsv(files.searchTerms) : [];
   const landingPages = files.landingPages ? parseGoogleAdsCsv(files.landingPages) : [];
+  const conversions = files.conversions ? parseGoogleAdsCsv(files.conversions) : [];
+  const lpQuality = files.lpQuality ? parseGoogleAdsCsv(files.lpQuality) : [];
+  const meta = files.meta ? parseGoogleAdsCsv(files.meta) : [];
   const warnings: string[] = [];
 
-  if (
-    campaigns.length === 0 &&
-    keywords.length === 0 &&
-    searchTerms.length === 0 &&
-    landingPages.length === 0
-  ) {
+  const allRows = [campaigns, keywords, searchTerms, landingPages, conversions, lpQuality, meta];
+  if (allRows.every((rows) => rows.length === 0)) {
     throw new Error("Ajoute au moins un CSV Google Ads avant de lancer l’import.");
   }
 
@@ -242,20 +265,22 @@ export function createGoogleAdsCsvBundle(files: {
   const keywordMetrics = aggregateRows(keywords);
   const campaignMetrics = aggregateRows(campaigns);
   const searchMetrics = aggregateRows(searchTerms);
+  const conversionMetrics = aggregateRows(conversions);
+  const qualityMetrics = aggregateRows(lpQuality);
+  const metaMetrics = aggregateRows(meta);
   const allUrls = new Set([
     ...lpMetrics.keys(),
     ...keywordMetrics.keys(),
     ...campaignMetrics.keys(),
     ...searchMetrics.keys(),
+    ...conversionMetrics.keys(),
+    ...qualityMetrics.keys(),
+    ...metaMetrics.keys(),
   ]);
 
   if (allUrls.size === 0) {
     const detectedHeaders = [
-      ...new Set(
-        [campaigns, keywords, searchTerms, landingPages]
-          .flatMap((rows) => (rows[0] ? Object.keys(rows[0]) : []))
-          .filter(Boolean),
-      ),
+      ...new Set(allRows.flatMap((rows) => (rows[0] ? Object.keys(rows[0]) : [])).filter(Boolean)),
     ];
     throw new Error(
       `Aucune URL de landing page reconnue. Les colonnes détectées sont : ${detectedHeaders.join(", ") || "aucune"}. Importe le rapport Google Ads "Pages de destination" (au moins un fichier doit contenir les URL finales).`,
@@ -267,21 +292,31 @@ export function createGoogleAdsCsvBundle(files: {
       "CSV Landing pages absent : les métriques par page seront agrégées à partir des autres fichiers qui contiennent une URL.",
     );
   if (keywords.length === 0)
-    warnings.push("CSV Mots-clés absent : Quality Score et expérience LP indisponibles.");
+    if (lpQuality.length === 0)
+      warnings.push(
+        "CSV Keywords et LP_Quality absents : Quality Score et expérience LP indisponibles.",
+      );
   if (searchTerms.length === 0)
     warnings.push("CSV Requêtes absent : les requêtes de recherche ne seront pas affichées.");
+  if (conversions.length === 0)
+    warnings.push(
+      "CSV Conversions absent : les conversions du rapport Landing Pages sont utilisées.",
+    );
 
   const lps: LP[] = [...allUrls].map((url, index) => {
     const metrics =
       lpMetrics.get(url) ??
       keywordMetrics.get(url) ??
       campaignMetrics.get(url) ??
-      searchMetrics.get(url)!;
-    const keywordRows = keywords.filter((row) => getRowUrl(row) === url);
-    const qualities = keywordRows
+      searchMetrics.get(url) ??
+      conversionMetrics.get(url) ??
+      qualityMetrics.get(url) ??
+      metaMetrics.get(url)!;
+    const qualityRows = [...lpQuality, ...keywords].filter((row) => getRowUrl(row) === url);
+    const qualities = qualityRows
       .map(getQualityScore)
       .filter((value): value is number => value !== undefined);
-    const experiences = keywordRows
+    const experiences = qualityRows
       .map(getLandingExperience)
       .filter((value): value is LP["lpExp"] => value !== undefined);
     const qs = qualities.length
@@ -290,9 +325,11 @@ export function createGoogleAdsCsvBundle(files: {
     const clicks = metrics.clicks;
     const spend = metrics.spend;
     const impressions = metrics.impressions;
-    const conversions = metrics.conversions;
+    const conversionCount = conversionMetrics.has(url)
+      ? conversionMetrics.get(url)!.conversions
+      : metrics.conversions;
     const ctr = impressions ? (clicks / impressions) * 100 : 0;
-    const cvr = clicks ? (conversions / clicks) * 100 : 0;
+    const cvr = clicks ? (conversionCount / clicks) * 100 : 0;
     const cpc = clicks ? spend / clicks : 0;
     const seaScore = Math.round(
       Math.min(
@@ -313,7 +350,7 @@ export function createGoogleAdsCsvBundle(files: {
       spend,
       clicks,
       impressions,
-      conversions,
+      conversions: conversionCount,
       ctr,
       cvr,
       cpc,
@@ -324,7 +361,8 @@ export function createGoogleAdsCsvBundle(files: {
       scoreCRO: 0,
       scoreShopify: 0,
       priority: priorityOf(seaScore),
-      keywords: keywordRows
+      keywords: keywords
+        .filter((row) => getRowUrl(row) === url)
         .map(
           (row) =>
             firstValue(row, ["Keyword", "Keyword text", "Mot clé", "Mot clé de recherche"]) ?? "",
@@ -334,5 +372,15 @@ export function createGoogleAdsCsvBundle(files: {
     };
   });
 
-  return { campaigns, keywords, searchTerms, landingPages, lps, warnings };
+  return {
+    campaigns,
+    keywords,
+    searchTerms,
+    landingPages,
+    conversions,
+    lpQuality,
+    meta,
+    lps,
+    warnings,
+  };
 }
