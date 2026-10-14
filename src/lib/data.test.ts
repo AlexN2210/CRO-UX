@@ -129,7 +129,18 @@ describe("recommandation", () => {
         campaigns: "Campaign;Clicks\nBrand;50",
         searchTerms: "Search term;Clicks\nrunning shoes;10",
       }),
-    ).toThrow("Aucune URL de landing page reconnue");
+    ).toThrow("Les colonnes détectées sont : Campaign, Clicks, Search term");
+  });
+
+  it("reconnaît les variantes d’en-tête Google Ads et les domaines sans protocole", () => {
+    const bundle = createGoogleAdsCsvBundle({
+      landingPages:
+        "URL finale développée;Campagne;Clics;Impressions;Conversions;Coût\nwww.store.example/pages/run;Brand;100;2000;8;25,50",
+    });
+
+    expect(bundle.lps).toHaveLength(1);
+    expect(bundle.lps[0].url).toBe("https://www.store.example/pages/run");
+    expect(bundle.lps[0].spend).toBe(25.5);
   });
 
   it("appelle les adaptateurs autorisés avec leur token privé et exige le format LP normalisé", async () => {

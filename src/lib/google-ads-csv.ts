@@ -69,26 +69,62 @@ export function parseGoogleAdsCsv(csvText: string): GoogleAdsCsvRow[] {
 }
 
 function getRowUrl(row: GoogleAdsCsvRow): string | undefined {
-  const rawUrl = firstValue(row, [
+  const knownUrl = firstValue(row, [
     "Landing page",
     "Landing page URL",
+    "Landing page (expanded)",
     "Final URL",
+    "Final mobile URL",
     "Expanded final URL",
+    "Expanded landing page",
     "Page",
     "URL",
     "Page URL",
     "URL finale",
+    "URL finale développée",
+    "URL finale étendue",
+    "URL finale élargie",
+    "URL de destination finale",
+    "URL de destination",
     "Page de destination",
+    "Page de destination (URL)",
     "URL de la page de destination",
   ]);
-  if (!rawUrl) return undefined;
+  const candidates = [
+    knownUrl,
+    ...Object.entries(row)
+      .filter(([header]) => {
+        const normalized = normalizeHeader(header);
+        return (
+          normalized.includes("url") ||
+          normalized.includes("landing page") ||
+          normalized.includes("page de destination") ||
+          normalized.includes("url de destination")
+        );
+      })
+      .map(([, value]) => value),
+  ];
 
-  try {
-    const url = new URL(rawUrl);
-    return ["http:", "https:"].includes(url.protocol) ? url.toString() : undefined;
-  } catch {
-    return undefined;
+  for (const candidate of candidates) {
+    const value = candidate?.trim();
+    if (!value || /^(?:--|n\/a|not set)$/iu.test(value)) continue;
+    const withProtocol = value.startsWith("//")
+      ? `https:${value}`
+      : /^[a-z][a-z\d+.-]*:\/\//iu.test(value)
+        ? value
+        : /^(?:www\.)?[^\s/]+\.[a-z]{2,}(?:[/:?#]|$)/iu.test(value)
+          ? `https://${value}`
+          : value;
+
+    try {
+      const url = new URL(withProtocol);
+      if (["http:", "https:"].includes(url.protocol)) return url.toString();
+    } catch {
+      continue;
+    }
   }
+
+  return undefined;
 }
 
 function getCampaign(row: GoogleAdsCsvRow): string {
@@ -214,8 +250,15 @@ export function createGoogleAdsCsvBundle(files: {
   ]);
 
   if (allUrls.size === 0) {
+    const detectedHeaders = [
+      ...new Set(
+        [campaigns, keywords, searchTerms, landingPages]
+          .flatMap((rows) => (rows[0] ? Object.keys(rows[0]) : []))
+          .filter(Boolean),
+      ),
+    ];
     throw new Error(
-      "Aucune URL de landing page reconnue. Exporte une colonne Landing page URL ou Final URL.",
+      `Aucune URL de landing page reconnue. Les colonnes détectées sont : ${detectedHeaders.join(", ") || "aucune"}. Importe le rapport Google Ads "Pages de destination" (au moins un fichier doit contenir les URL finales).`,
     );
   }
 
