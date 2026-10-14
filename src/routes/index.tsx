@@ -13,7 +13,14 @@ import {
   Bar,
   Cell,
 } from "recharts";
-import { getCurrentLPs, setCurrentLPs, estimate, eur } from "@/lib/data";
+import { estimate, eur } from "@/lib/data";
+import {
+  getCurrentLPs,
+  getImportedGoogleAdsCsv,
+  setActiveAnalysisLps,
+  setImportedGoogleAdsCsv,
+} from "@/lib/analysis-session";
+import { createGoogleAdsCsvBundle, type GoogleAdsCsvBundle } from "@/lib/google-ads-csv";
 import { PageHeader, Stat, Panel, DataTable, ScorePill } from "@/components/ui-kit";
 
 export const Route = createFileRoute("/")({
@@ -45,8 +52,36 @@ const tip = {
 
 type AppPath = "/" | "/sea" | "/cro" | "/shopify" | "/recommandation" | "/rapport" | "/devis";
 
+type GoogleAdsCredentials = {
+  developerToken: string;
+  clientId: string;
+  clientSecret: string;
+  refreshToken: string;
+  customerId: string;
+  loginCustomerId: string;
+};
+
+const emptyGoogleAdsCredentials: GoogleAdsCredentials = {
+  developerToken: "",
+  clientId: "",
+  clientSecret: "",
+  refreshToken: "",
+  customerId: "",
+  loginCustomerId: "",
+};
+
 function Dashboard() {
   const [analysisLps, setAnalysisLps] = useState(getCurrentLPs());
+  const [selectedCsvFiles, setSelectedCsvFiles] = useState<{
+    campaigns: File | null;
+    keywords: File | null;
+    searchTerms: File | null;
+    landingPages: File | null;
+  }>({ campaigns: null, keywords: null, searchTerms: null, landingPages: null });
+  const [csvBundle, setCsvBundle] = useState<GoogleAdsCsvBundle | null>(() =>
+    getImportedGoogleAdsCsv(),
+  );
+  const [googleAdsCredentials, setGoogleAdsCredentials] = useState(emptyGoogleAdsCredentials);
   const [analysisMessage, setAnalysisMessage] = useState(
     "Les chiffres affichés sont des données démo jusqu’au lancement de l’analyse.",
   );
@@ -62,12 +97,65 @@ function Dashboard() {
   }));
 
   const handleLaunchAnalysis = async () => {
+    const csvFiles = Object.values(selectedCsvFiles).filter((file): file is File => file !== null);
+    if (csvFiles.length > 0) {
+      setIsLaunching(true);
+      try {
+        const totalBytes = csvFiles.reduce((total, file) => total + file.size, 0);
+        if (totalBytes > 20 * 1024 * 1024) {
+          throw new Error("Les CSV dépassent la limite totale de 20 Mo.");
+        }
+        const texts = await Promise.all(csvFiles.map((file) => file.text()));
+        const textByKind = Object.fromEntries(
+          Object.entries(selectedCsvFiles)
+            .filter((entry): entry is [keyof typeof selectedCsvFiles, File] => entry[1] !== null)
+            .map(([kind], index) => [kind, texts[index]]),
+        );
+        const imported = createGoogleAdsCsvBundle(textByKind);
+        setImportedGoogleAdsCsv(imported);
+        setCsvBundle(imported);
+        setAnalysisLps(imported.lps);
+        setAnalysisMessage(
+          `Import terminé : ${imported.lps.length} LP, ${imported.campaigns.length} campagnes, ${imported.keywords.length} mots-clés, ${imported.searchTerms.length} requêtes.`,
+        );
+      } catch (error) {
+        setAnalysisMessage(error instanceof Error ? error.message : "Impossible de lire les CSV.");
+      } finally {
+        setIsLaunching(false);
+      }
+      return;
+    }
+
+    const requiredCredentials = [
+      googleAdsCredentials.developerToken,
+      googleAdsCredentials.clientId,
+      googleAdsCredentials.clientSecret,
+      googleAdsCredentials.refreshToken,
+      googleAdsCredentials.customerId,
+    ];
+    const hasAnyCredentials = Object.values(googleAdsCredentials).some((value) => value.trim());
+    if (hasAnyCredentials && requiredCredentials.some((value) => !value.trim())) {
+      setAnalysisMessage(
+        "Il manque un champ Google Ads obligatoire. Vérifie le developer token, OAuth et le Customer ID.",
+      );
+      return;
+    }
+
     setIsLaunching(true);
     try {
       const response = await fetch("/api/analysis", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: "{}",
+        body: JSON.stringify({
+          googleAds: {
+            developer_token: googleAdsCredentials.developerToken,
+            client_id: googleAdsCredentials.clientId,
+            client_secret: googleAdsCredentials.clientSecret,
+            refresh_token: googleAdsCredentials.refreshToken,
+            customer_id: googleAdsCredentials.customerId,
+            login_customer_id: googleAdsCredentials.loginCustomerId,
+          },
+        }),
       });
       const result = (await response.json()) as {
         lps?: typeof lps;
@@ -76,12 +164,15 @@ function Dashboard() {
       };
       if (!response.ok) throw new Error(result.error ?? "L’analyse a échoué.");
       if (result.lps) {
-        setCurrentLPs(result.lps);
+        setActiveAnalysisLps(result.lps);
         setAnalysisLps(result.lps);
       }
       setAnalysisMessage(
         `Analyse terminée : ${result.lps?.length ?? 0} LP · ${(result.connectedSources ?? []).join(" · ") || "données démo"}.`,
       );
+      if (result.connectedSources?.includes("Google Ads")) {
+        setGoogleAdsCredentials(emptyGoogleAdsCredentials);
+      }
     } catch (error) {
       setAnalysisMessage(error instanceof Error ? error.message : "Erreur pendant l’analyse.");
     } finally {
@@ -123,7 +214,163 @@ function Dashboard() {
         />
       </div>
 
-      <Panel className="mt-6" title="Analyse sécurisée">
+      <Panel className="mt-6" title="Importer les CSV Google Ads">
+        <p className="mb-4 text-sm text-muted-foreground">
+          Exporte chaque onglet Google Sheets séparément en CSV puis sélectionne les fichiers ici.
+          L’import se fait dans ton navigateur; les fichiers ne sont pas envoyés au serveur.
+        </p>
+        <div className="grid gap-4 md:grid-cols-2">
+          {(
+            [
+              ["campaigns", "Campagnes"],
+              ["keywords", "Mots-clés (avec QS / expérience LP)"],
+              ["searchTerms", "Requêtes de recherche"],
+              ["landingPages", "Landing pages (URLs finales et métriques)"],
+            ] as const
+          ).map(([kind, label]) => (
+            <label key={kind} className="space-y-1 text-sm text-muted-foreground">
+              <span>{label}</span>
+              <input
+                type="file"
+                accept=".csv,text/csv"
+                onChange={(event) =>
+                  setSelectedCsvFiles((current) => ({
+                    ...current,
+                    [kind]: event.target.files?.[0] ?? null,
+                  }))
+                }
+                className="block w-full rounded-md border border-border bg-background px-3 py-2 text-foreground file:mr-3 file:rounded-sm file:border-0 file:bg-secondary file:px-3 file:py-1.5"
+              />
+            </label>
+          ))}
+        </div>
+        {csvBundle && (
+          <div className="mt-4 border-l-2 border-primary pl-3 text-sm">
+            <p className="font-medium">CSV importés dans cette session</p>
+            {csvBundle.warnings.map((warning) => (
+              <p key={warning} className="mt-1 text-muted-foreground">
+                {warning}
+              </p>
+            ))}
+          </div>
+        )}
+        <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
+          <p className="text-sm text-primary" role="status">
+            {analysisMessage}
+          </p>
+          <button
+            type="button"
+            className="btn-primary"
+            onClick={handleLaunchAnalysis}
+            disabled={isLaunching || Object.values(selectedCsvFiles).every((file) => file === null)}
+          >
+            {isLaunching ? "Import en cours…" : "Importer et analyser les CSV"}
+          </button>
+        </div>
+      </Panel>
+
+      <Panel className="mt-6" title="Connexion Google Ads (OAuth directe)">
+        <div className="grid gap-4 md:grid-cols-2">
+          <label className="space-y-1 text-sm text-muted-foreground">
+            <span>Developer token Google Ads</span>
+            <input
+              type="password"
+              autoComplete="off"
+              spellCheck={false}
+              value={googleAdsCredentials.developerToken}
+              onChange={(event) =>
+                setGoogleAdsCredentials((current) => ({
+                  ...current,
+                  developerToken: event.target.value,
+                }))
+              }
+              className="w-full rounded-md border border-border bg-background px-3 py-2 text-foreground"
+              placeholder="Coller le developer token"
+            />
+          </label>
+          <label className="space-y-1 text-sm text-muted-foreground">
+            <span>OAuth Client ID</span>
+            <input
+              type="text"
+              autoComplete="off"
+              spellCheck={false}
+              value={googleAdsCredentials.clientId}
+              onChange={(event) =>
+                setGoogleAdsCredentials((current) => ({ ...current, clientId: event.target.value }))
+              }
+              className="w-full rounded-md border border-border bg-background px-3 py-2 text-foreground"
+              placeholder="...apps.googleusercontent.com"
+            />
+          </label>
+          <label className="space-y-1 text-sm text-muted-foreground">
+            <span>OAuth Client Secret</span>
+            <input
+              type="password"
+              autoComplete="off"
+              spellCheck={false}
+              value={googleAdsCredentials.clientSecret}
+              onChange={(event) =>
+                setGoogleAdsCredentials((current) => ({
+                  ...current,
+                  clientSecret: event.target.value,
+                }))
+              }
+              className="w-full rounded-md border border-border bg-background px-3 py-2 text-foreground"
+              placeholder="Coller le client secret"
+            />
+          </label>
+          <label className="space-y-1 text-sm text-muted-foreground">
+            <span>OAuth Refresh Token</span>
+            <input
+              type="password"
+              autoComplete="off"
+              spellCheck={false}
+              value={googleAdsCredentials.refreshToken}
+              onChange={(event) =>
+                setGoogleAdsCredentials((current) => ({
+                  ...current,
+                  refreshToken: event.target.value,
+                }))
+              }
+              className="w-full rounded-md border border-border bg-background px-3 py-2 text-foreground"
+              placeholder="Coller le refresh token"
+            />
+          </label>
+          <label className="space-y-1 text-sm text-muted-foreground">
+            <span>Customer ID (10 chiffres)</span>
+            <input
+              type="text"
+              inputMode="numeric"
+              autoComplete="off"
+              value={googleAdsCredentials.customerId}
+              onChange={(event) =>
+                setGoogleAdsCredentials((current) => ({
+                  ...current,
+                  customerId: event.target.value,
+                }))
+              }
+              className="w-full rounded-md border border-border bg-background px-3 py-2 text-foreground"
+              placeholder="123-456-7890"
+            />
+          </label>
+          <label className="space-y-1 text-sm text-muted-foreground">
+            <span>Manager Customer ID (optionnel)</span>
+            <input
+              type="text"
+              inputMode="numeric"
+              autoComplete="off"
+              value={googleAdsCredentials.loginCustomerId}
+              onChange={(event) =>
+                setGoogleAdsCredentials((current) => ({
+                  ...current,
+                  loginCustomerId: event.target.value,
+                }))
+              }
+              className="w-full rounded-md border border-border bg-background px-3 py-2 text-foreground"
+              placeholder="À remplir si accès via MCC"
+            />
+          </label>
+        </div>
         <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
           <p className="text-sm text-primary" role="status">
             {analysisMessage}
@@ -137,6 +384,10 @@ function Dashboard() {
             {isLaunching ? "Analyse en cours..." : "Lancer l'analyse"}
           </button>
         </div>
+        <p className="mt-3 text-xs text-muted-foreground">
+          Les valeurs ne sont pas enregistrées dans le navigateur. Elles sont envoyées au serveur
+          sécurisé au clic, utilisées pour cette analyse, puis vidées du formulaire après succès.
+        </p>
       </Panel>
 
       {seaOnly && (

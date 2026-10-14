@@ -18,6 +18,10 @@ export type LP = {
   cpc: number;
   keywords: string[];
   coherence: number;
+  sessions?: number;
+  pageviews?: number;
+  revenue?: number;
+  engagementRate?: number;
   // CRO/UX
   h1: string;
   h2Count: number;
@@ -32,6 +36,9 @@ export type LP = {
   lhA11y: number;
   lhBP: number;
   lhSEO: number;
+  lcp?: number;
+  cls?: number;
+  inp?: number;
   // Shopify
   template: string;
   shopSections: string[];
@@ -271,19 +278,10 @@ export function countTemplates(lps: { template: string }[]) {
 }
 
 let cache: LP[] | null = null;
-let currentAnalysis: LP[] | null = null;
 
 export function getLPs(): LP[] {
   if (!cache) cache = build();
   return cache;
-}
-
-export function getCurrentLPs(): LP[] {
-  return currentAnalysis ?? getLPs();
-}
-
-export function setCurrentLPs(lps: LP[] | null) {
-  currentAnalysis = lps;
 }
 
 export function estimate(lps: LP[]) {

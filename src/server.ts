@@ -242,20 +242,41 @@ async function handleSecurityApi(request: Request, env: RuntimeEnv): Promise<Res
     if (!(await hasValidSession(request, sessionSecret!)))
       return jsonResponse({ error: "Session expirée." }, 401);
     const contentLength = Number(request.headers.get("content-length") ?? 0);
-    if (contentLength > 4096) return jsonResponse({ error: "Requête trop volumineuse." }, 413);
+    if (contentLength > 8192) return jsonResponse({ error: "Requête trop volumineuse." }, 413);
+    let submittedCredentials: { googleAds?: Record<string, unknown> };
     try {
-      await readJsonBody<unknown>(request, 4096);
+      submittedCredentials =
+        (await readJsonBody<{ googleAds?: Record<string, unknown> }>(request, 8192)) ?? {};
     } catch {
       return jsonResponse({ error: "Requête d’analyse invalide." }, 400);
     }
     try {
-      const dataset = await loadAnalysisData(
-        Object.fromEntries(
-          Object.entries(env).filter(
-            (entry): entry is [string, string] => typeof entry[1] === "string",
-          ),
+      const analysisEnv = Object.fromEntries(
+        Object.entries(env).filter(
+          (entry): entry is [string, string] => typeof entry[1] === "string",
         ),
       );
+      const allowedCredentialNames = [
+        "GOOGLE_ADS_DEVELOPER_TOKEN",
+        "GOOGLE_ADS_CLIENT_ID",
+        "GOOGLE_ADS_CLIENT_SECRET",
+        "GOOGLE_ADS_REFRESH_TOKEN",
+        "GOOGLE_ADS_CUSTOMER_ID",
+        "GOOGLE_ADS_LOGIN_CUSTOMER_ID",
+      ] as const;
+      const submittedGoogleAds = submittedCredentials.googleAds ?? {};
+      for (const name of allowedCredentialNames) {
+        const value = submittedGoogleAds[name.replace("GOOGLE_ADS_", "").toLowerCase()];
+        if (typeof value === "string" && value.trim()) {
+          if (value.length > 4096)
+            return jsonResponse({ error: "Un champ de connexion est trop long." }, 400);
+          analysisEnv[name] = value.trim();
+        }
+      }
+      if (allowedCredentialNames.some((name) => analysisEnv[name])) {
+        analysisEnv.ANALYSIS_MODE = "live";
+      }
+      const dataset = await loadAnalysisData(analysisEnv);
       return jsonResponse({ lps: dataset.lps, connectedSources: dataset.connectedSources });
     } catch (error) {
       console.error("Analysis failed", error);

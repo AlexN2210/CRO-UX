@@ -1,4 +1,5 @@
-import { getCurrentLPs, estimate, eur } from "@/lib/data";
+import { estimate, eur } from "@/lib/data";
+import { getCurrentLPs } from "@/lib/analysis-session";
 import { Panel } from "@/components/ui-kit";
 
 const WIREFRAME = [

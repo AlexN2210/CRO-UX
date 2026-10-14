@@ -1,4 +1,5 @@
 import { getLPs, priorityOf, type LP } from "./data";
+import { buildUnifiedLpDataset } from "./data-fusion";
 import { getProductionConfig, resolveProductionStatus, type ProductionConfig } from "./production";
 
 export type AnalysisDataset = {
@@ -229,18 +230,14 @@ export async function fetchGoogleAdsLandingPages(
 
 function getSourceHeaders(config: ProductionConfig, name: string): Record<string, string> {
   const headers: Record<string, string> = { Accept: "application/json" };
-  if (name === "Shopify Admin" && config.shopifyAccessToken) {
-    headers["X-Shopify-Access-Token"] = config.shopifyAccessToken;
-    headers.Authorization = `Bearer ${config.shopifyAccessToken}`;
-  }
-
-  if (name === "Google Analytics 4" && config.googleAnalyticsApiKey) {
-    headers.Authorization = `Bearer ${config.googleAnalyticsApiKey}`;
-  }
-
-  if (name === "Search Console" && config.searchConsoleApiKey) {
-    headers.Authorization = `Bearer ${config.searchConsoleApiKey}`;
-    headers["X-API-Key"] = config.searchConsoleApiKey;
+  const adapterToken =
+    name === "Shopify Admin"
+      ? config.shopifyAdapterToken
+      : name === "Google Analytics 4"
+        ? config.googleAnalyticsAdapterToken
+        : config.searchConsoleAdapterToken;
+  if (adapterToken) {
+    headers.Authorization = `Bearer ${adapterToken}`;
   }
 
   return headers;
@@ -274,7 +271,7 @@ export function getDataSourceStatus(env: Record<string, string | undefined> = {}
 
   return {
     ...status,
-    statusLabel: status.readyForProduction ? "connecté" : "démo",
+    statusLabel: status.configuredSources.length > 0 ? "configuré" : "démo",
     mode: config.mode,
   };
 }
@@ -299,13 +296,17 @@ export async function loadAnalysisData(
   }
 
   const sourcesToTry = [
-    { name: "Shopify Admin", url: config.shopifyApiUrl },
-    { name: "Google Analytics 4", url: config.googleAnalyticsApiUrl },
-    { name: "Search Console", url: config.searchConsoleApiUrl },
+    { name: "Shopify Admin", url: config.shopifyAdapterUrl },
+    { name: "Google Analytics 4", url: config.googleAnalyticsAdapterUrl },
+    { name: "Search Console", url: config.searchConsoleAdapterUrl },
   ].filter((source) => Boolean(source.url));
 
   const resolved: LP[] = [];
   const successfulSources: string[] = [];
+  let googleAdsPayload: LP[] = [];
+  let shopifyPayload: LP[] = [];
+  let ga4Payload: LP[] = [];
+  const speedPayload: Array<{ url: string; lcp?: number; cls?: number; inp?: number }> = [];
   const allowedHosts = (env.DATA_API_ALLOWED_HOSTS ?? "")
     .split(",")
     .map((host) => host.trim().toLowerCase())
@@ -314,7 +315,9 @@ export async function loadAnalysisData(
 
   if (status.configuredSources.includes("Google Ads")) {
     try {
-      resolved.push(...(await fetchGoogleAdsLandingPages(config)));
+      const googleAdsRows = await fetchGoogleAdsLandingPages(config);
+      googleAdsPayload = googleAdsRows;
+      resolved.push(...googleAdsRows);
       successfulSources.push("Google Ads");
     } catch (error) {
       failures.push(error instanceof Error ? error.message : "Google Ads request failed.");
@@ -331,6 +334,12 @@ export async function loadAnalysisData(
       if (lps.length > 0) {
         resolved.push(...lps);
         successfulSources.push(source.name);
+        if (source.name === "Shopify Admin") {
+          shopifyPayload = lps;
+        }
+        if (source.name === "Google Analytics 4") {
+          ga4Payload = lps;
+        }
       }
     } catch (error) {
       failures.push(error instanceof Error ? error.message : "Source API request failed.");
@@ -341,9 +350,19 @@ export async function loadAnalysisData(
     throw new Error(failures[0] ?? "Aucune donnée LP valide reçue des sources configurées.");
   }
 
+  const merged =
+    successfulSources.length > 1
+      ? buildUnifiedLpDataset({
+          googleAds: googleAdsPayload,
+          shopify: shopifyPayload,
+          ga4: ga4Payload,
+          speed: speedPayload,
+        })
+      : resolved;
+
   return {
     mode: config.mode,
-    lps: resolved.length > 0 ? resolved : getLPs(),
+    lps: merged.length > 0 ? merged : getLPs(),
     connectedSources: resolved.length > 0 ? successfulSources : [],
     status,
   };

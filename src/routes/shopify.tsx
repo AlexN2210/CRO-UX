@@ -1,6 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useState } from "react";
-import { getCurrentLPs, countTemplates, eur } from "@/lib/data";
+import { countTemplates, eur } from "@/lib/data";
+import { getCurrentLPs } from "@/lib/analysis-session";
 import { PageHeader, Stat, Panel, DataTable, ScorePill } from "@/components/ui-kit";
 
 export const Route = createFileRoute("/shopify")({

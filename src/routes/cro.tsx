@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { getCurrentLPs } from "@/lib/data";
+import { getCurrentLPs } from "@/lib/analysis-session";
 import { PageHeader, Stat, Panel, DataTable, ScorePill } from "@/components/ui-kit";
 
 export const Route = createFileRoute("/cro")({

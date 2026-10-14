@@ -1,6 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { Mail, Printer } from "lucide-react";
-import { getCurrentLPs, estimate, eur } from "@/lib/data";
+import { estimate, eur } from "@/lib/data";
+import { getCurrentLPs } from "@/lib/analysis-session";
 import { PageHeader, Panel } from "@/components/ui-kit";
 
 export const Route = createFileRoute("/devis")({

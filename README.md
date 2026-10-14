@@ -11,7 +11,7 @@ Dans le panneau de configuration de ton hébergeur, ajoute ces variables au serv
 - `APP_ACCESS_PASSWORD` : ton mot de passe unique, au moins 16 caractères.
 - `APP_SESSION_SECRET` : secret aléatoire d’au moins 32 caractères. Le changer invalide toutes les sessions.
 - Google Ads : `GOOGLE_ADS_DEVELOPER_TOKEN`, `GOOGLE_ADS_CLIENT_ID`, `GOOGLE_ADS_CLIENT_SECRET`, `GOOGLE_ADS_REFRESH_TOKEN`, `GOOGLE_ADS_CUSTOMER_ID` et, si nécessaire, `GOOGLE_ADS_LOGIN_CUSTOMER_ID`.
-- Shopify / GA4 / Search Console : credentials de leurs adaptateurs serveur respectifs (`SHOPIFY_ACCESS_TOKEN`, `GA4_API_KEY`, `SEARCH_CONSOLE_API_KEY`).
+- Shopify / GA4 / Search Console : URLs et tokens Bearer de tes adaptateurs privés (`*_ADAPTER_URL`, `*_ADAPTER_TOKEN`). Ces tokens authentifient l’adaptateur LP Radar, pas Shopify ou Google.
 
 Générer une valeur de session localement avec Node.js :
 
@@ -19,7 +19,7 @@ Générer une valeur de session localement avec Node.js :
 node -e "console.log(require('crypto').randomBytes(48).toString('base64url'))"
 ```
 
-Ne partage jamais leurs valeurs dans un ticket, une capture d’écran ou une conversation et ne les préfixe jamais par `VITE_`. Le connecteur Google Ads natif utilise `GOOGLE_ADS_API_VERSION` (par défaut `v25`) et ne nécessite ni `GOOGLE_ADS_API_URL` ni clé API classique. Les adaptateurs des autres sources utilisent les URLs serveur `SHOPIFY_API_URL`, `GA4_API_URL` et `SEARCH_CONSOLE_API_URL`; leurs hôtes HTTPS doivent être listés dans `DATA_API_ALLOWED_HOSTS` (noms d’hôte séparés par des virgules).
+Ne partage jamais leurs valeurs dans un ticket, une capture d’écran ou une conversation et ne les préfixe jamais par `VITE_`. Le connecteur Google Ads natif utilise `GOOGLE_ADS_API_VERSION` (par défaut `v25`) et ne nécessite ni `GOOGLE_ADS_API_URL` ni clé API classique. Les variables `SHOPIFY_ADAPTER_URL`, `GA4_ADAPTER_URL` et `SEARCH_CONSOLE_ADAPTER_URL` doivent désigner tes propres adaptateurs backend HTTPS; leurs hôtes exacts sont inscrits dans `DATA_API_ALLOWED_HOSTS` (liste séparée par des virgules). Les tokens `*_ADAPTER_TOKEN` sont des Bearer tokens pour ces adaptateurs, pas des tokens Shopify/Google.
 
 ## Protections incluses
 
@@ -41,13 +41,15 @@ Les rapports affichent des données métier aux utilisateurs connectés. N’acc
 
 Pour obtenir les valeurs, active Google Ads API sur un projet Google Cloud et crée un client OAuth de type application Web. Autorise l’accès Google Ads avec le scope `https://www.googleapis.com/auth/adwords`, puis obtiens un refresh token avec accès hors ligne. Dans Google Ads, récupère le developer token depuis API Center et le Customer ID du compte à lire. Attribue au compte Google OAuth un rôle de lecture seule si cela suffit à ton audit.
 
-Ajoute dans Vercel `GOOGLE_ADS_DEVELOPER_TOKEN`, `GOOGLE_ADS_CLIENT_ID`, `GOOGLE_ADS_CLIENT_SECRET`, `GOOGLE_ADS_REFRESH_TOKEN` et `GOOGLE_ADS_CUSTOMER_ID`; ajoute `GOOGLE_ADS_LOGIN_CUSTOMER_ID` seulement si le compte est consulté via un compte administrateur. Mets `ANALYSIS_MODE=live`, puis redéploie. Ne saisis aucune de ces valeurs dans l’interface web et ne les transmets pas dans le chat.
+Tu peux coller le developer token, les identifiants OAuth et le Customer ID dans le panneau **Connexion Google Ads** du dashboard, puis cliquer sur **Lancer l’analyse**. Le formulaire transmet les valeurs à l’endpoint serveur authentifié pour cette seule requête; elles ne sont ni mises dans `localStorage` ni persistées, et les champs sont vidés après une réponse Google Ads valide. Utilise HTTPS et ne partage pas les valeurs dans une capture d’écran ou une conversation. Le Manager Customer ID est facultatif et ne sert que pour un accès via MCC.
+
+Alternative pour ne pas les ressaisir : ajoute les mêmes variables `GOOGLE_ADS_*` au serveur dans Vercel et redéploie. Elles peuvent alors être utilisées lorsque le formulaire est vide. Les deux variables d’accès à l’application (`APP_ACCESS_PASSWORD` et `APP_SESSION_SECRET`) restent nécessaires dans Vercel dans les deux cas.
 
 Le serveur échange le refresh token contre un access token auprès de Google OAuth, puis interroge l’API Google Ads REST v25 avec `landing_page_view` sur les 30 derniers jours. Il agrège dépenses, impressions, clics, CTR et conversions par URL finale. Le developer token doit avoir l’accès API nécessaire au compte; Google peut limiter un token en mode test ou exiger une demande d’accès supérieur.
 
 Les résultats Google Ads ont une couverture **SEA uniquement**. Les vues CRO/UX, Shopify, recommandation et devis restent masquées avec cette seule source; elles ne sont pas estimées à partir de valeurs fictives.
 
-Les URLs Shopify, GA4 et Search Console configurées doivent pointer vers des adaptateurs backend de confiance qui renvoient des landing pages au format utilisé par l’application : tableau JSON direct, ou propriété `lps`, `landingPages` ou `data`.
+**État des autres connexions :** elles ne sont pas des connecteurs natifs dans cette version. Shopify doit être appelé par l’adaptateur avec OAuth Shopify et un scope Admin en lecture seule approprié; Shopify Admin GraphQL attend `X-Shopify-Access-Token` et `POST` vers `/admin/api/{version}/graphql.json`. GA4 Data API `runReport` nécessite une propriété (`properties/{id}`) et un access token OAuth ayant le scope `https://www.googleapis.com/auth/analytics.readonly`. Search Console Search Analytics nécessite un `siteUrl`, un corps de requête daté et OAuth avec le scope `https://www.googleapis.com/auth/webmasters.readonly`; une API key n’autorise pas les données privées. Ces adaptateurs doivent exécuter ces appels côté serveur puis renvoyer les landing pages normalisées au format JSON accepté ici : tableau direct ou propriété `lps`, `landingPages` ou `data`. Ils ne doivent jamais journaliser les secrets.
 
 ## Développement local
 

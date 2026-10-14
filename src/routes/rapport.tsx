@@ -1,6 +1,7 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { Printer } from "lucide-react";
-import { getCurrentLPs, estimate, eur } from "@/lib/data";
+import { estimate, eur } from "@/lib/data";
+import { getCurrentLPs } from "@/lib/analysis-session";
 import { PageHeader, Panel, ScorePill } from "@/components/ui-kit";
 import { RecommendationContent } from "@/components/Recommendation";
 

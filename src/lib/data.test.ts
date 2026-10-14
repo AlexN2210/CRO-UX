@@ -1,12 +1,18 @@
-import { describe, it, expect } from "vitest";
+import { afterEach, describe, it, expect, vi } from "vitest";
 import { recommendApproach, getLPs } from "./data";
 import { createAnalysisPlan, getProductionConfig } from "./production";
+import { createGoogleAdsCsvBundle, parseGoogleAdsCsv } from "./google-ads-csv";
 import {
   fetchGoogleAdsLandingPages,
   getDataSourceStatus,
   loadAnalysisData,
   mapGoogleAdsRowsToLPs,
 } from "./data-source";
+import { buildUnifiedLpDataset } from "./data-fusion";
+
+afterEach(() => {
+  vi.unstubAllGlobals();
+});
 
 describe("recommandation", () => {
   it("template quand la majorité partage un template", () => {
@@ -44,8 +50,8 @@ describe("recommandation", () => {
       GOOGLE_ADS_CLIENT_SECRET: "client-secret",
       GOOGLE_ADS_REFRESH_TOKEN: "refresh-token",
       GOOGLE_ADS_CUSTOMER_ID: "1234567890",
-      SHOPIFY_API_URL: "https://shop.example.com",
-      SHOPIFY_ACCESS_TOKEN: "secret",
+      SHOPIFY_ADAPTER_URL: "https://adapter.example.com/shopify",
+      SHOPIFY_ADAPTER_TOKEN: "adapter-secret",
       ANALYSIS_MODE: "live",
     } as Record<string, string>);
 
@@ -55,7 +61,7 @@ describe("recommandation", () => {
     expect(config.googleAdsClientSecret).toBe("client-secret");
     expect(config.googleAdsRefreshToken).toBe("refresh-token");
     expect(config.googleAdsCustomerId).toBe("1234567890");
-    expect(config.shopifyApiUrl).toBe("https://shop.example.com");
+    expect(config.shopifyAdapterUrl).toBe("https://adapter.example.com/shopify");
     expect(config.mode).toBe("live");
   });
 
@@ -71,6 +77,7 @@ describe("recommandation", () => {
 
     expect(status.readyForProduction).toBe(true);
     expect(status.configuredSources).toContain("Google Ads");
+    expect(status.statusLabel).toBe("configuré");
     expect(status.mode).toBe("hybrid");
     expect(JSON.stringify(status)).not.toContain("must-not-leak");
   });
@@ -83,6 +90,67 @@ describe("recommandation", () => {
 
     expect(status.readyForProduction).toBe(false);
     expect(status.configuredSources).not.toContain("Google Ads");
+  });
+
+  it("lit les CSV Google Ads FR et agrège les exports des quatre onglets", () => {
+    expect(parseGoogleAdsCsv('Campagne;Clics\n"Brand, France";12')).toEqual([
+      { Campagne: "Brand, France", Clics: "12" },
+    ]);
+    const bundle = createGoogleAdsCsvBundle({
+      campaigns: 'Campagne;Clics;Impressions;Coût\n"Brand, France";120;2400;36,50',
+      keywords:
+        "Mot clé;Landing page URL;Quality Score;Exp. landing page\nchaussures running;https://store.example/pages/run;7;Supérieur à la moyenne",
+      searchTerms:
+        'Requête de recherche;Clics;Impressions;Conversions\n"chaussures running femme";18;300;2',
+      landingPages:
+        "Landing page URL;Campagne;Clics;Impressions;Conversions;Coût\nhttps://store.example/pages/run;Brand;100;2000;8;25,50",
+    });
+
+    expect(bundle.campaigns).toHaveLength(1);
+    expect(bundle.campaigns[0].Campagne).toBe("Brand, France");
+    expect(bundle.keywords).toHaveLength(1);
+    expect(bundle.searchTerms).toHaveLength(1);
+    expect(bundle.landingPages).toHaveLength(1);
+    expect(bundle.lps).toHaveLength(1);
+    expect(bundle.lps[0]).toMatchObject({
+      url: "https://store.example/pages/run",
+      spend: 25.5,
+      clicks: 100,
+      impressions: 2000,
+      conversions: 8,
+      qs: 7,
+      dataCoverage: "sea-only",
+    });
+  });
+
+  it("renvoie une erreur explicite quand aucun CSV ne contient d’URL finale", () => {
+    expect(() =>
+      createGoogleAdsCsvBundle({
+        campaigns: "Campaign;Clicks\nBrand;50",
+        searchTerms: "Search term;Clicks\nrunning shoes;10",
+      }),
+    ).toThrow("Aucune URL de landing page reconnue");
+  });
+
+  it("appelle les adaptateurs autorisés avec leur token privé et exige le format LP normalisé", async () => {
+    const sourceLp = { ...getLPs()[0], id: 71, url: "https://store.example/pages/live" };
+    const fetchMock = vi.fn<typeof fetch>(async (_input, init) => {
+      expect(new Headers(init?.headers).get("authorization")).toBe("Bearer adapter-only-token");
+      expect(new Headers(init?.headers).get("x-shopify-access-token")).toBeNull();
+      return new Response(JSON.stringify({ lps: [sourceLp] }), { status: 200 });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const result = await loadAnalysisData({
+      ANALYSIS_MODE: "live",
+      SHOPIFY_ADAPTER_URL: "https://adapter.example.com/shopify",
+      SHOPIFY_ADAPTER_TOKEN: "adapter-only-token",
+      DATA_API_ALLOWED_HOSTS: "adapter.example.com",
+    });
+
+    expect(result.lps).toEqual([sourceLp]);
+    expect(result.connectedSources).toEqual(["Shopify Admin"]);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
   it("agrège les métriques Google Ads par URL finale", () => {
@@ -107,6 +175,75 @@ describe("recommandation", () => {
     expect(lps[0].conversions).toBe(10);
     expect(lps[0].ctr).toBe(7.5);
     expect(lps[0].campaign).toBe("Search Brand · Search Generic");
+  });
+
+  it("fusionne les données Google Ads, Shopify, GA4 et Speed par URL", () => {
+    const dataset = buildUnifiedLpDataset({
+      googleAds: [
+        {
+          url: "https://shop.example/products/run",
+          campaign: "Brand",
+          spend: 120,
+          clicks: 800,
+          impressions: 9000,
+          conversions: 12,
+          ctr: 8.89,
+          cvr: 1.5,
+          cpc: 0.15,
+          qs: 7,
+          lpExp: "Moyenne",
+          keywords: ["chaussures running"],
+          scoreSEA: 68,
+        },
+      ],
+      shopify: [
+        {
+          url: "https://shop.example/products/run",
+          template: "page.landing-produit",
+          shopSections: ["hero", "product-grid", "testimonials"],
+          metafields: 8,
+          dynamicSections: 3,
+          ctaCount: 3,
+          ctaAboveFold: true,
+          h2Count: 4,
+          reassurance: true,
+          sections: 6,
+          scrollDepth: 70,
+        },
+      ],
+      ga4: [
+        {
+          url: "https://shop.example/products/run",
+          sessions: 2500,
+          pageviews: 3000,
+          conversions: 35,
+          cvRate: 1.4,
+          revenue: 4200,
+          engagementRate: 52,
+        },
+      ],
+      speed: [
+        {
+          url: "https://shop.example/products/run",
+          lcp: 2.1,
+          cls: 0.08,
+          inp: 150,
+        },
+      ],
+    });
+
+    expect(dataset).toHaveLength(1);
+    expect(dataset[0]).toMatchObject({
+      url: "https://shop.example/products/run",
+      template: "page.landing-produit",
+      spend: 120,
+      sessions: 2500,
+      revenue: 4200,
+      scoreSEA: 68,
+    });
+    expect(dataset[0].scoreShopify).toBeGreaterThan(0);
+    expect(dataset[0].scoreGlobal).toBeGreaterThan(0);
+    expect(dataset[0].priority).toMatch(/P1|P2|P3/);
   });
 
   it("rafraîchit le token OAuth et appelle Google Ads SearchStream", async () => {

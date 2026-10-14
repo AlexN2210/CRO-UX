@@ -1,7 +1,10 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { useState } from "react";
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip } from "recharts";
-import { getCurrentLPs, eur } from "@/lib/data";
+import { eur } from "@/lib/data";
+import { getCurrentLPs, getImportedGoogleAdsCsv } from "@/lib/analysis-session";
 import { PageHeader, Stat, Panel, DataTable, ScorePill } from "@/components/ui-kit";
+import type { GoogleAdsCsvRow } from "@/lib/google-ads-csv";
 
 export const Route = createFileRoute("/sea")({
   head: () => ({
@@ -24,6 +27,10 @@ export const Route = createFileRoute("/sea")({
 
 function SeaPage() {
   const lps = getCurrentLPs();
+  const csvBundle = getImportedGoogleAdsCsv();
+  const [activeCsvTab, setActiveCsvTab] = useState<
+    "campaigns" | "keywords" | "searchTerms" | "landingPages"
+  >("landingPages");
   const seaOnly = lps.length > 0 && lps.every((lp) => lp.dataCoverage === "sea-only");
   const spend = lps.reduce((s, l) => s + l.spend, 0);
   const avg = (f: (l: (typeof lps)[0]) => number) =>
@@ -205,6 +212,76 @@ function SeaPage() {
           },
         ]}
       />
+      {csvBundle && (
+        <Panel className="mt-10" title="Détails des onglets Google Ads importés">
+          <div
+            className="mb-4 flex flex-wrap gap-2"
+            role="tablist"
+            aria-label="Onglets CSV Google Ads"
+          >
+            {(
+              [
+                ["campaigns", `Campagnes (${csvBundle.campaigns.length})`],
+                ["keywords", `Mots-clés (${csvBundle.keywords.length})`],
+                ["searchTerms", `Requêtes (${csvBundle.searchTerms.length})`],
+                ["landingPages", `Landing pages (${csvBundle.landingPages.length})`],
+              ] as const
+            ).map(([tab, label]) => (
+              <button
+                key={tab}
+                type="button"
+                role="tab"
+                aria-selected={activeCsvTab === tab}
+                onClick={() => setActiveCsvTab(tab)}
+                className={`rounded-md border px-3 py-2 text-sm ${activeCsvTab === tab ? "border-primary bg-primary/10 text-primary" : "border-border text-muted-foreground hover:text-foreground"}`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+          <GoogleAdsCsvTable rows={csvBundle[activeCsvTab]} />
+        </Panel>
+      )}
     </>
+  );
+}
+
+function GoogleAdsCsvTable({ rows }: { rows: GoogleAdsCsvRow[] }) {
+  if (rows.length === 0) {
+    return <p className="text-sm text-muted-foreground">Aucune ligne importée pour cet onglet.</p>;
+  }
+
+  const columns = Object.keys(rows[0]);
+  return (
+    <div className="overflow-x-auto">
+      <table className="w-full text-sm">
+        <thead>
+          <tr className="border-b border-border text-left">
+            {columns.map((column) => (
+              <th key={column} className="kicker whitespace-nowrap px-3 py-2">
+                {column}
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {rows.slice(0, 500).map((row, index) => (
+            <tr key={index} className="border-b border-border/60">
+              {columns.map((column) => (
+                <td key={column} className="whitespace-nowrap px-3 py-2">
+                  {row[column]}
+                </td>
+              ))}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      {rows.length > 500 && (
+        <p className="mt-3 text-xs text-muted-foreground">
+          Affichage limité aux 500 premières lignes; export fourni en totalité reste importé en
+          mémoire de session.
+        </p>
+      )}
+    </div>
   );
 }

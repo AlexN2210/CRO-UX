@@ -9,12 +9,12 @@ export interface ProductionConfig {
   googleAdsRefreshToken?: string;
   googleAdsCustomerId?: string;
   googleAdsLoginCustomerId?: string;
-  shopifyApiUrl?: string;
-  shopifyAccessToken?: string;
-  googleAnalyticsApiUrl?: string;
-  googleAnalyticsApiKey?: string;
-  searchConsoleApiUrl?: string;
-  searchConsoleApiKey?: string;
+  shopifyAdapterUrl?: string;
+  shopifyAdapterToken?: string;
+  googleAnalyticsAdapterUrl?: string;
+  googleAnalyticsAdapterToken?: string;
+  searchConsoleAdapterUrl?: string;
+  searchConsoleAdapterToken?: string;
   analysisBatchSize: number;
   enableAutoAnalysis: boolean;
 }
@@ -64,12 +64,12 @@ export function getProductionConfig(
     googleAdsRefreshToken: sanitizeString(env.GOOGLE_ADS_REFRESH_TOKEN),
     googleAdsCustomerId: sanitizeString(env.GOOGLE_ADS_CUSTOMER_ID),
     googleAdsLoginCustomerId: sanitizeString(env.GOOGLE_ADS_LOGIN_CUSTOMER_ID),
-    shopifyApiUrl: sanitizeString(env.SHOPIFY_API_URL),
-    shopifyAccessToken: sanitizeString(env.SHOPIFY_ACCESS_TOKEN),
-    googleAnalyticsApiUrl: sanitizeString(env.GA4_API_URL),
-    googleAnalyticsApiKey: sanitizeString(env.GA4_API_KEY),
-    searchConsoleApiUrl: sanitizeString(env.SEARCH_CONSOLE_API_URL),
-    searchConsoleApiKey: sanitizeString(env.SEARCH_CONSOLE_API_KEY),
+    shopifyAdapterUrl: sanitizeString(env.SHOPIFY_ADAPTER_URL),
+    shopifyAdapterToken: sanitizeString(env.SHOPIFY_ADAPTER_TOKEN),
+    googleAnalyticsAdapterUrl: sanitizeString(env.GA4_ADAPTER_URL),
+    googleAnalyticsAdapterToken: sanitizeString(env.GA4_ADAPTER_TOKEN),
+    searchConsoleAdapterUrl: sanitizeString(env.SEARCH_CONSOLE_ADAPTER_URL),
+    searchConsoleAdapterToken: sanitizeString(env.SEARCH_CONSOLE_ADAPTER_TOKEN),
     analysisBatchSize: Number(env.ANALYSIS_BATCH_SIZE ?? 50),
     enableAutoAnalysis: env.ENABLE_AUTO_ANALYSIS !== "false",
   };
@@ -89,18 +89,18 @@ export function getDataSources(config: ProductionConfig): ProductionDataSource[]
     },
     {
       name: "Shopify Admin",
-      url: config.shopifyApiUrl,
-      configured: Boolean(config.shopifyApiUrl && config.shopifyAccessToken),
+      url: config.shopifyAdapterUrl,
+      configured: Boolean(config.shopifyAdapterUrl && config.shopifyAdapterToken),
     },
     {
       name: "Google Analytics 4",
-      url: config.googleAnalyticsApiUrl,
-      configured: Boolean(config.googleAnalyticsApiUrl && config.googleAnalyticsApiKey),
+      url: config.googleAnalyticsAdapterUrl,
+      configured: Boolean(config.googleAnalyticsAdapterUrl && config.googleAnalyticsAdapterToken),
     },
     {
       name: "Search Console",
-      url: config.searchConsoleApiUrl,
-      configured: Boolean(config.searchConsoleApiUrl && config.searchConsoleApiKey),
+      url: config.searchConsoleAdapterUrl,
+      configured: Boolean(config.searchConsoleAdapterUrl && config.searchConsoleAdapterToken),
     },
   ];
 }
