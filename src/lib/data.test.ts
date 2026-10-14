@@ -191,6 +191,27 @@ describe("recommandation", () => {
     expect(bundle.warnings.join(" ")).toContain("Spend amount, Visits");
   });
 
+  it("ignore la ligne titre avant les vrais en-têtes du rapport Landing page", () => {
+    const bundle = createGoogleAdsCsvBundle({
+      landingPages:
+        "Landing page report;;;;;;;;;;\nCampaign ID;Campaign Name;LandingPage;Cost;Clicks;Impressions;Conversions\n1;Brand;https://store.example/run;36.50;120;2400;8",
+      lpQuality:
+        "LP_Quality;;;;;;;;;;\nLandingPage;QualityScore;LP Experience\nhttps://store.example/run;8;Above average",
+    });
+
+    expect(bundle.lps).toHaveLength(1);
+    expect(bundle.lps[0]).toMatchObject({
+      url: "https://store.example/run",
+      campaign: "Brand",
+      spend: 36.5,
+      clicks: 120,
+      impressions: 2400,
+      conversions: 8,
+      qs: 8,
+      lpExp: "Au-dessus",
+    });
+  });
+
   it("appelle les adaptateurs autorisés avec leur token privé et exige le format LP normalisé", async () => {
     const sourceLp = { ...getLPs()[0], id: 71, url: "https://store.example/pages/live" };
     const fetchMock = vi.fn<typeof fetch>(async (_input, init) => {

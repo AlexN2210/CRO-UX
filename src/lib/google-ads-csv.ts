@@ -54,11 +54,10 @@ function firstValue(row: GoogleAdsCsvRow, candidates: string[]): string | undefi
 }
 
 export function parseGoogleAdsCsv(csvText: string): GoogleAdsCsvRow[] {
-  const parsed = Papa.parse<Record<string, string>>(csvText.replace(/^\uFEFF/u, ""), {
-    header: true,
+  const parsed = Papa.parse<string[]>(csvText.replace(/^\uFEFF/u, ""), {
+    header: false,
     skipEmptyLines: "greedy",
     dynamicTyping: false,
-    transformHeader: (header) => header.trim(),
   });
 
   if (parsed.errors.length > 0) {
@@ -66,17 +65,56 @@ export function parseGoogleAdsCsv(csvText: string): GoogleAdsCsvRow[] {
     if (fatal) throw new Error(`CSV illisible : ${fatal.message}`);
   }
 
-  return parsed.data.filter((row) =>
-    Object.values(row).some((value) => String(value ?? "").trim()),
+  const scoreHeaderRow = (row: string[]) => {
+    const headers = row.map(normalizeHeader);
+    const categories = [
+      /(?:landing ?page|landingpage|final ?url|url finale|page de destination)/u,
+      /(?:^| )(?:campaign|campagne)(?: |$)/u,
+      /(?:^| )(?:cost|spend|cout|depenses|budget)(?: |$)/u,
+      /(?:^| )(?:clicks?|clics?)(?: |$)/u,
+      /(?:^| )(?:impressions?|impr)(?: |$)/u,
+      /(?:conversion|conversions)/u,
+      /(?:keyword|mot cle|search term|requete)/u,
+      /(?:quality score|lp quality|experience)/u,
+    ];
+    return categories.reduce(
+      (score, category) => score + Number(headers.some((header) => category.test(header))),
+      0,
+    );
+  };
+
+  const headerCandidates = parsed.data.slice(0, 30).map((row, index) => ({
+    row,
+    index,
+    score: scoreHeaderRow(row),
+  }));
+  const headerRow = headerCandidates.reduce((best, candidate) =>
+    candidate.score > best.score ? candidate : best,
   );
+  const seenHeaders = new Map<string, number>();
+  const headers = headerRow.row.map((value, index) => {
+    const base = value.trim() || `_${index}`;
+    const occurrence = seenHeaders.get(base) ?? 0;
+    seenHeaders.set(base, occurrence + 1);
+    return occurrence === 0 ? base : `${base}_${occurrence}`;
+  });
+
+  return parsed.data
+    .slice(headerRow.index + 1)
+    .filter((row) => row.some((value) => String(value ?? "").trim()))
+    .map((row) =>
+      Object.fromEntries(headers.map((header, index) => [header, String(row[index] ?? "").trim()])),
+    );
 }
 
 function getRowUrl(row: GoogleAdsCsvRow): string | undefined {
   const knownUrl = firstValue(row, [
     "Landing page",
     "Landing page URL",
+    "LandingPage",
     "Landing page (expanded)",
     "Final URL",
+    "FinalURL",
     "Final mobile URL",
     "Expanded final URL",
     "Expanded landing page",
@@ -198,6 +236,7 @@ function getQualityScore(row: GoogleAdsCsvRow): number | undefined {
   const value = parseNumber(
     firstValue(row, [
       "Quality Score",
+      "QualityScore",
       "Quality score",
       "LP Quality",
       "LP Quality Score",
