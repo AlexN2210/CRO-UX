@@ -1,0 +1,19 @@
+{
+  "name": "lp-radar-connectors",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "node server.mjs",
+    "start": "node server.mjs",
+    "test": "node --test",
+    "install:browser": "playwright install chromium"
+  },
+  "engines": {
+    "node": ">=22.19"
+  },
+  "dependencies": {
+    "@google-analytics/data": "^7.3.0",
+    "lighthouse": "^13.5.0",
+    "playwright": "^1.64.1"
+  }
+}
