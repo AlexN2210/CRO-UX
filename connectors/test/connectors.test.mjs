@@ -52,19 +52,26 @@ test("preserves distinct storefront filter queries and product variant fragments
   );
 });
 
-test("allows only the configured shop/www storefront aliases during canonical redirects", () => {
+test("preserves allowed storefront domains and rejects other hosts", () => {
   const configuredSite = "https://shop.carea-cuisine-bain.fr";
   const allowedHosts = getAllowedStorefrontHosts(configuredSite);
   assert.equal(allowedHosts.has("www.carea-cuisine-bain.fr"), true);
   assert.equal(allowedHosts.has("unrelated.example"), false);
   assert.deepEqual(
     normalizeTargetUrls(
-      ["https://www.carea-cuisine-bain.fr/115-eviers?q=Mod%C3%A8le-2+bacs#/dimension-90"],
+      [
+        "https://www.carea-cuisine-bain.fr/115-eviers?q=Mod%C3%A8le-2+bacs#/dimension-90",
+        "http://carea-kueche-bad.de/collections/spuelsteine",
+        "https://unrelated.example/steal",
+      ],
       configuredSite,
       40,
-      allowedHosts,
+      getAllowedStorefrontHosts(configuredSite, "carea-kueche-bad.de"),
     ),
-    ["https://shop.carea-cuisine-bain.fr/115-eviers?q=Mod%C3%A8le-2+bacs#/dimension-90"],
+    [
+      "https://www.carea-cuisine-bain.fr/115-eviers?q=Mod%C3%A8le-2+bacs#/dimension-90",
+      "https://carea-kueche-bad.de/collections/spuelsteine",
+    ],
   );
 });
 

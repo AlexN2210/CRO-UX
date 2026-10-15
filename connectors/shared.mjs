@@ -35,7 +35,7 @@ export function normalizeTargetUrls(values, siteUrl, maximum = 100, allowedHosts
       const parsed = new URL(value, site);
       if (!allowed.has(parsed.hostname.toLowerCase())) continue;
       parsed.protocol = site.protocol;
-      parsed.host = site.host;
+      parsed.port = site.port;
       parsed.username = "";
       parsed.password = "";
       uniqueUrls.add(parsed.href);
