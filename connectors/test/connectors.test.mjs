@@ -55,8 +55,13 @@ test("preserves distinct storefront filter queries and product variant fragments
 test("preserves allowed storefront domains and rejects other hosts", () => {
   const configuredSite = "https://shop.carea-cuisine-bain.fr";
   const allowedHosts = getAllowedStorefrontHosts(configuredSite);
+  const germanStorefrontHosts = getAllowedStorefrontHosts(
+    configuredSite,
+    "carea-kueche-bad.de",
+  );
   assert.equal(allowedHosts.has("www.carea-cuisine-bain.fr"), true);
   assert.equal(allowedHosts.has("unrelated.example"), false);
+  assert.equal(germanStorefrontHosts.has("www.carea-kueche-bad.de"), true);
   assert.deepEqual(
     normalizeTargetUrls(
       [
@@ -66,7 +71,7 @@ test("preserves allowed storefront domains and rejects other hosts", () => {
       ],
       configuredSite,
       40,
-      getAllowedStorefrontHosts(configuredSite, "carea-kueche-bad.de"),
+      germanStorefrontHosts,
     ),
     [
       "https://www.carea-cuisine-bain.fr/115-eviers?q=Mod%C3%A8le-2+bacs#/dimension-90",

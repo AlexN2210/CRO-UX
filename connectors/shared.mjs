@@ -20,7 +20,10 @@ export function getAllowedStorefrontHosts(siteUrl, additionalHosts = "") {
     hosts.add(`www.${rootHost}`);
   }
   for (const host of additionalHosts.split(",").map((value) => value.trim().toLowerCase())) {
-    if (host) hosts.add(host);
+    if (host) {
+      hosts.add(host);
+      if (!/^(?:shop|www)\./u.test(host)) hosts.add(`www.${host}`);
+    }
   }
   return hosts;
 }
